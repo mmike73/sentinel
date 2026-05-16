@@ -1,0 +1,4 @@
+id = "REP-06"
+name = "Cron Persistence"
+alert_type = "LSMFileWrite"
+expected_state = "WARN"

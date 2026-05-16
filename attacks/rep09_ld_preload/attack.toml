@@ -1,0 +1,4 @@
+id = "REP-09"
+name = "LD_PRELOAD Library Hijack"
+alert_type = "LSMFileWrite"
+expected_state = "WARN"

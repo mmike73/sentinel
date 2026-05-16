@@ -1,0 +1,4 @@
+id = "REP-15"
+name = "Reverse Shell"
+alert_type = "NetworkAnomaly"
+expected_state = "THROTTLE"

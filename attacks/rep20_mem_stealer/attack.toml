@@ -1,0 +1,4 @@
+id = "REP-20"
+name = "LSASS-style Memory Stealer"
+alert_type = "ProcessInjection"
+expected_state = "FREEZE"

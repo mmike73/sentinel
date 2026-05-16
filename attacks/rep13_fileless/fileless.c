@@ -1,0 +1,83 @@
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <errno.h>
+
+static const unsigned char PAYLOAD_ELF[] = {
+    0x7f,0x45,0x4c,0x46,0x02,0x01,0x01,0x00,
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x02,0x00,0x3e,0x00,0x01,0x00,0x00,0x00,
+    0x78,0x00,0x40,0x00,0x00,0x00,0x00,0x00,
+    0x40,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,0x40,0x00,0x38,0x00,
+    0x01,0x00,0x40,0x00,0x00,0x00,0x00,0x00,
+    0x01,0x00,0x00,0x00,0x05,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x40,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x40,0x00,0x00,0x00,0x00,0x00,
+    0xa0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0xa0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x10,0x00,0x00,0x00,0x00,0x00,0x00,
+    0xb8,0x3c,0x00,0x00,0x00,
+    0x31,0xff,
+    0x0f,0x05
+};
+
+int main(void)
+{
+    printf("[REP-13] Creating anonymous in-memory file (memfd_create)...\n");
+
+    int memfd = (int)syscall(SYS_memfd_create, "sentinel_payload", 0);
+    if (memfd < 0) {
+        perror("memfd_create failed (kprobe still fires via mmap path)");
+    } else {
+        printf("[REP-13] memfd=%d — writing ELF payload (%zu bytes)\n",
+               memfd, sizeof(PAYLOAD_ELF));
+        if (write(memfd, PAYLOAD_ELF, sizeof(PAYLOAD_ELF)) < 0)
+            perror("write memfd");
+        else
+            printf("[REP-13] Payload written to anonymous fd — no disk trace\n");
+    }
+
+    printf("[REP-13] Allocating RWX anonymous mapping (mmap)...\n");
+    void *region = mmap(NULL, 4096,
+                        PROT_READ | PROT_WRITE | PROT_EXEC,
+                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (region == MAP_FAILED) {
+        perror("mmap failed");
+    } else {
+        unsigned char sled[] = {
+            0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,
+            0xb8,0x3c,0x00,0x00,0x00,
+            0x31,0xff,
+            0xc3
+        };
+        memcpy(region, sled, sizeof(sled));
+        mprotect(region, 4096, PROT_READ | PROT_EXEC);
+        printf("[REP-13] RWX mapping created — MemoryInjection kprobe fired\n");
+        ((void(*)(void))region)();
+        munmap(region, 4096);
+    }
+
+    if (memfd >= 0) {
+        char fd_path[64];
+        snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", memfd);
+        printf("[REP-13] Executing anonymous ELF via %s (execve kprobe fires)...\n",
+               fd_path);
+        char *argv[] = { fd_path, NULL };
+        char *envp[] = { NULL };
+        execve(fd_path, argv, envp);
+        perror("execve fd_path (kprobe fired regardless)");
+        close(memfd);
+    }
+
+    printf("[REP-13] Fileless chain complete: mmap+write+execve kprobes fired\n");
+    return 0;
+}

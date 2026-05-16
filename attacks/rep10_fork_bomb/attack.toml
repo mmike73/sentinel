@@ -1,0 +1,4 @@
+id = "REP-10"
+name = "Fork Bomb + cgroup escape attempt"
+alert_type = "SyscallAnomaly"
+expected_state = "WATCH"

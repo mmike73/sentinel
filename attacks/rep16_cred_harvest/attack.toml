@@ -1,0 +1,4 @@
+id = "REP-16"
+name = "Credential Harvesting"
+alert_type = "LSMFileWrite"
+expected_state = "WARN"

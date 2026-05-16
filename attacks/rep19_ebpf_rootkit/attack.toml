@@ -1,0 +1,4 @@
+id = "REP-19"
+name = "eBPF Rootkit (TripleCross-style)"
+alert_type = "ProcessInjection"
+expected_state = "FREEZE"

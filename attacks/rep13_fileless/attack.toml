@@ -1,0 +1,4 @@
+id = "REP-13"
+name = "Fileless Malware (memfd_create)"
+alert_type = "MemoryInjection"
+expected_state = "WARN"

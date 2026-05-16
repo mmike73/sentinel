@@ -1,0 +1,4 @@
+id = "REP-14"
+name = "Process Hollowing"
+alert_type = "ProcessInjection"
+expected_state = "FREEZE"

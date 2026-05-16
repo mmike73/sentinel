@@ -1,0 +1,4 @@
+id = "REP-12"
+name = "SSH Brute-force"
+alert_type = "NetworkAnomaly"
+expected_state = "THROTTLE"

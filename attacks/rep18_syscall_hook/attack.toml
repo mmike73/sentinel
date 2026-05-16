@@ -1,0 +1,4 @@
+id = "REP-18"
+name = "Syscall Hook Rootkit (Reptile-style)"
+alert_type = "HiddenPID"
+expected_state = "FREEZE"

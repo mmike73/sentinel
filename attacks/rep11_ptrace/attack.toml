@@ -1,0 +1,4 @@
+id = "REP-11"
+name = "ptrace Process Injection"
+alert_type = "ProcessInjection"
+expected_state = "FREEZE"

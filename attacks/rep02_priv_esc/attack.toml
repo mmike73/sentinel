@@ -1,0 +1,4 @@
+id = "REP-02"
+name = "Privilege Escalation (pkexec/setuid)"
+alert_type = "PrivilegeEscalation"
+expected_state = "WARN"

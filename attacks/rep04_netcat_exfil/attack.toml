@@ -1,0 +1,4 @@
+id = "REP-04"
+name = "Netcat Data Exfiltration"
+alert_type = "NetworkAnomaly"
+expected_state = "THROTTLE"

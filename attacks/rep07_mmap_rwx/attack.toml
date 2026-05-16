@@ -1,0 +1,4 @@
+id = "REP-07"
+name = "RWX mmap Shellcode Injection"
+alert_type = "MemoryInjection"
+expected_state = "WARN"

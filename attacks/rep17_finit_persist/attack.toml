@@ -1,0 +1,4 @@
+id = "REP-17"
+name = "Kernel Persistence (finit_module)"
+alert_type = "HiddenPID"
+expected_state = "FREEZE"

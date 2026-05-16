@@ -1,0 +1,6 @@
+id = "REP-21"
+name = "VM Detection & Hypervisor Escape Probe (CPUID + DMI + PCI + namespace pivot)"
+alert_type = "PrivilegeEscalation"
+expected_state = "ISOLATE"
+complexity = "high"
+syscalls = [257, 105]

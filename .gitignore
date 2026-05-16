@@ -1,0 +1,57 @@
+# Vagrant
+.vagrant/
+
+# Claude Code session state
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# ML model artefacts
+*.pkl
+*.joblib
+
+# Go build outputs
+sentinel-daemon
+sentinel-quarantine
+daemon/sentinel-daemon
+quarantine/sentinel-quarantine
+
+# C / kernel-module build artefacts
+*.o
+*.ko
+*.so
+*.mod
+*.mod.c
+Module.symvers
+modules.order
+.tmp_versions/
+
+# eBPF compiled object (compiled on the VM; source is tracked)
+tracer.bpf.o
+*.bpf.o
+
+# SQLite databases and WAL files
+*.db
+*.db-shm
+*.db-wal
+
+# Log files
+*.log
+
+# Test-run results (keep the placeholder so the dir exists)
+results/*
+!results/.gitkeep
+
+# Temporary / editor files
+*.tmp
+*.swp
+*.swo
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,4 @@
+id = "REP-01"
+name = "Diamorphine Rootkit (insmod)"
+alert_type = "HiddenPID"
+expected_state = "FREEZE"

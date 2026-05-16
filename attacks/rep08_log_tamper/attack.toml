@@ -1,0 +1,4 @@
+id = "REP-08"
+name = "Log File Tampering"
+alert_type = "LogTamper"
+expected_state = "WARN"

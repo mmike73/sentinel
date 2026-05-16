@@ -1,0 +1,4 @@
+id = "REP-05"
+name = "Webshell (apache2→bash lineage)"
+alert_type = "ParentChildAnomaly"
+expected_state = "WARN"
