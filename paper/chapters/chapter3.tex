@@ -1,0 +1,213 @@
+\chapter{Analiza și Proiectarea Sistemului Sentinel}
+\label{chap:ch3}
+
+\par Proiectarea sistemului Sentinel pornește de la cerința de a detecta și răspunde la amenințări în timp real, cu o arhitectură modulară care separă clar instrumentarea kernel-ului, calculul scorului de risc și aplicarea acțiunilor de containment. Cele trei componente comunică printr-un flux unidirecțional: programul eBPF produce evenimente, daemonul Go le procesează și le persistă, iar managerul de carantinare le consumă și acționează.
+
+
+\section{Cerințe funcționale și nefuncționale}
+\label{sec:requirements}
+
+\par Cerințele funcționale principale sunt:
+
+\begin{itemize}
+    \item \textbf{RF1}: Interceptarea apelurilor de sistem relevante din perspectiva securității la nivel de kernel, fără modificarea kernel-ului sau instalarea de module suplimentare.
+    \item \textbf{RF2}: Calcularea unui scor de risc compus pentru fiecare eveniment detectat, utilizând cel puțin un strat de reguli statice.
+    \item \textbf{RF3}: Clasificarea evenimentelor în șase stări de severitate, de la absența riscului (OK) la necesitatea înghețării imediate (FREEZE).
+    \item \textbf{RF4}: Aplicarea automată a acțiunilor de carantinare proporționale cu starea detectată, prin mecanisme standard ale kernel-ului.
+    \item \textbf{RF5}: Persistarea evenimentelor și a acțiunilor de carantinare într-o bază de date locală, accesibilă pentru analiză retrospectivă.
+    \item \textbf{RF6}: Expunerea unui API REST pentru integrarea unui scorer ML opțional, retrenabil fără oprirea sistemului.
+\end{itemize}
+
+\par Cerințele nefuncționale sunt:
+
+\begin{itemize}
+    \item \textbf{RN1}: Suprasarcina CPU introdusă de instrumentarea eBPF să fie sub 2\% pe un sistem cu activitate normală.
+    \item \textbf{RN2}: Latența de la detecție la aplicarea acțiunii de carantinare (fără scorer ML) să fie sub 5 ms.
+    \item \textbf{RN3}: Sistemul să funcționeze pe kernel Linux $\geq 5.8$ cu cgroup v2 activat.
+    \item \textbf{RN4}: Pierderea de evenimente la saturarea ring buffer-ului să fie monitorizabilă și raportată în timp real.
+\end{itemize}
+
+
+\section{Arhitectura sistemului}
+\label{sec:architecture}
+
+\par Sentinel este structurat în trei componente principale, conectate printr-un flux de date unidirecțional ilustrat schematic mai jos:
+
+\begin{enumerate}
+    \item \textbf{Programul eBPF} (\texttt{tracer.bpf.c}): se execută în kernel, interceptează syscall-uri prin kprobes și publică evenimentele într-un ring buffer eBPF.
+    \item \textbf{Daemonul Go} (\texttt{sentinel-daemon}): rulează în spațiul utilizator, consumă ring buffer-ul, calculează scoruri de risc și scrie evenimentele în baza de date SQLite.
+    \item \textbf{Managerul de carantinare} (\texttt{sentinel-quarantine}): procesează evenimentele cu severitate ridicată din baza de date și aplică acțiunile de containment prin cgroup v2 și nftables.
+\end{enumerate}
+
+\par Opțional, un \textbf{scorer ML} (\texttt{isolation\_forest.py}) expune un endpoint REST pe portul 8765; daemonul Go îl consultă asincron pentru a rafina scorurile statice fără a bloca procesarea principală.
+
+\begin{figure}[htbp]
+\centering
+\begin{verbatim}
+  Kernel space                      User space
+ +------------------+  ring buf   +------------------+
+ |  eBPF kprobes    | ----------> | sentinel-daemon  |
+ |  (tracer.bpf.o)  |             |  scoring engine  |
+ +------------------+             +--------+---------+
+                                           | SQLite WAL
+                               +-----------v----------+
+                               | sentinel-quarantine  |
+                               |  cgroup v2 / nftables|
+                               +----------------------+
+                [optional] <---- ML scorer REST :8765
+\end{verbatim}
+\caption{Arhitectura sistemului Sentinel: fluxul de date de la kprobe la carantinare.}
+\label{fig:architecture}
+\end{figure}
+
+\par Decuplarea daemonului de managerul de carantinare prin baza de date SQLite are două avantaje: permite reluarea procesării evenimentelor din trecut după un restart al managerului și elimină dependența de timp real între producerea evenimentului și aplicarea acțiunii — acceptabilă deoarece latența de polling (500 ms) este suficientă pentru majoritatea acțiunilor de containment.
+
+
+\section{Proiectarea programului eBPF}
+\label{sec:ebpf_design}
+
+\par Programul eBPF monitorizează 21 de apeluri de sistem, fiecare acoperit de o funcție handler cu prefixul \texttt{kp\_}. Sunt implementate două variante de handler:
+
+\begin{itemize}
+    \item \texttt{submit\_event(nr)}: handler generic care înregistrează timestamp (nanosecunde), PID, UID, numărul syscall-ului și numele procesului (\texttt{comm}). Utilizat pentru syscall-urile fără argumente relevante de cale.
+    \item \texttt{submit\_event\_with\_path(nr, ctx)}: variantă extinsă care extrage, prin \texttt{bpf\_probe\_read\_user\_str}, calea de fișier din registrul \texttt{rsi} al structurii inner \texttt{pt\_regs} — utilizată pentru \texttt{openat}, \texttt{unlinkat}, \texttt{renameat2}.
+\end{itemize}
+
+\par Handler-ul pentru \texttt{write} (syscall 1) necesită un tratament special. Descriptorul de fișier nu este o cale, ci un întreg; totuși, informația este valoroasă pentru detectarea scrierilor în fișiere de log sau configurație. Handler-ul filtrează fd-urile 0, 1 și 2 (stdin, stdout, stderr) — acestea generează un volum ridicat de evenimente cu relevanță de securitate scăzută — și codifică numărul descriptorului în câmpul \texttt{fname} ca șir \texttt{"fd:N"}. Daemonul Go rezolvă acest șir la calea reală prin \texttt{/proc/\{pid\}/fd/\{N\}} după primirea evenimentului.
+
+\par Filtrul pe mapa \texttt{pid\_blacklist} previne auto-instrumentarea daemonului: fiecare apel de sistem al daemonului însuși ar genera un eveniment, care ar fi procesat, generând alte apeluri de sistem — o buclă de feedback ce ar satura ring buffer-ul. Imediat după pornire, daemonul Go își inserează propriul PID în mapă. Rezolvarea căilor prin \texttt{/proc/\{pid\}/fd/\{N\}} este posibilă deoarece pseudo-sistemul de fișiere \texttt{/proc} expune linkuri simbolice către fișierele deschise ale fiecărui proces \cite{Kerrisk2010}.
+
+
+\section{Proiectarea motorului de scoring}
+\label{sec:scoring_design}
+
+\par Motorul de scoring calculează un scor de risc în intervalul $[0, 100]$ printr-un sistem pe trei straturi aplicate secvențial.
+
+\subsection{Stratul 1: Ponderi statice per syscall}
+\label{subsec:static_weights}
+
+\par Fiecărui apel de sistem îi este asociată o greutate statică de risc $w_{nr} \in [5, 95]$, calibrată pe baza empirică a lucrărilor \cite{Cozzi2018} și \cite{Buczak2016}. Greutățile extreme (95) sunt rezervate apelurilor \texttt{finit\_module} și \texttt{init\_module} — care nu au utilizare legitimă obișnuită în spațiul utilizator — iar greutățile minime (5) corespund apelurilor comune dar monitorizabile, cum ar fi \texttt{openat}. Dacă procesul rulează ca root ($uid = 0$), greutatea este amplificată cu factorul 1,3:
+
+\begin{equation}
+    \text{score}_{\text{static}}(nr, uid) = w_{nr} \cdot \begin{cases} 1.3 & \text{dacă } uid = 0 \\ 1.0 & \text{altfel} \end{cases}
+    \label{eq:static_score}
+\end{equation}
+
+\par Amplificarea rădăcinii reflectă faptul că aceleași syscall-uri au impact semnificativ mai mare când sunt executate cu privilegii complete.
+
+\subsection{Stratul 2: Detectarea activității în rafale}
+\label{subsec:burst_detection}
+
+\par Unele atacuri se manifestă prin frecvențe neobișnuit de mari de apeluri de sistem identice: un brute-force SSH generează sute de apeluri \texttt{connect} pe secundă, un fork bomb generează zeci de \texttt{clone} pe secundă. Stratul de detectare a rafale menține o fereastră temporală glisantă pentru fiecare triplet (PID, syscall\_nr, start\_time). Dacă numărul de apeluri depășește un prag configurat în fereastra de timp configurată, se emite un alert cu scor fix, conform parametrilor din Tabelul~\ref{tab:burst_params}.
+
+\begin{table}[htbp]
+\begin{center}
+\begin{tabular}{|p{90pt}|p{50pt}|p{70pt}|p{55pt}|p{60pt}|}
+\hline
+\textbf{Syscall(uri)} & \textbf{Prag} & \textbf{Fereastră} & \textbf{Cooldown} & \textbf{Scor burst} \\
+\hline\hline
+\texttt{socket}, \texttt{connect} & 5  & 3 s  & 10 s & 75.0 \\
+\hline
+\texttt{clone}                     & 20 & 2 s  & 10 s & 35.0 \\
+\hline
+\texttt{openat}                    & 8  & 3 s  & 10 s & 60.0 \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Parametrii de detectare a activității în rafale}
+\label{tab:burst_params}
+\end{table}
+
+\par Cheia de identificare a rafale incorporează \texttt{start\_time} al procesului (câmpul 22 din \texttt{/proc/\{pid\}/stat}) pentru a preveni coliziunile false între procese cu PID-uri reutilizate — o situație frecventă pe sisteme cu multe procese de scurtă durată.
+
+\par Intervalul de cooldown de 10 s previne emiterea repetată a aceluiași alert pentru aceeași rafală continuă: odată emis un alert, nu va mai fi emis altul pentru același (PID, syscall) timp de 10 secunde, reducând zgomotul în baza de date.
+
+\subsection{Stratul 3: Alerte bazate pe căi de fișiere}
+\label{subsec:path_alerts}
+
+\par Al treilea strat verifică, pentru syscall-urile cu cale disponibilă (\texttt{write} cu fd rezolvat, \texttt{openat}, \texttt{unlinkat}, \texttt{renameat2}), dacă calea accesată corespunde unor tipare de fișiere sensibile:
+
+\begin{itemize}
+    \item Scriere sau ștergere în \texttt{/var/log/}: indicator LogTamper (scor 50).
+    \item Deschidere sau scriere \texttt{/etc/cron*}: indicator LSMFileWrite (scor 50), acoperind tehnicile de persistență prin cron.
+    \item Scriere în \texttt{/etc/passwd}, \texttt{/etc/shadow}, \texttt{/etc/sudoers}: indicator PrivilegeEscalation (scor 65), acoperind modificarea directă a bazei de autentificare.
+    \item Deschidere de fișier \texttt{.so} din \texttt{/tmp/}, \texttt{/dev/shm/}, \texttt{/run/}: indicator LSMFileWrite (scor 50), acoperind tehnicile de injecție de bibliotecă fileless.
+\end{itemize}
+
+\par Dacă stratul de path alerts produce un scor, acesta suprascrie scorul static (nu se adunează), prevenind o amplificare artificială.
+
+\subsection{Integrarea scorerului ML}
+\label{subsec:ml_integration}
+
+\par Dacă URL-ul scorerului ML este configurat la pornire, daemonul Go apelează asincron endpoint-ul \texttt{POST /score} pentru fiecare eveniment cu scor $\geq 10$. Apelul are o limită de timp de 50 ms; dacă scorerul nu răspunde în timp, scorul rămâne neschimbat. Scorul final este o medie ponderată:
+
+\begin{equation}
+    \text{score}_{\text{final}} = (1 - w) \cdot \text{score}_{\text{static}} + w \cdot \text{score}_{\text{ML}}
+    \label{eq:blended_score}
+\end{equation}
+
+\noindent unde $w \in \{0.1, 0.2, 0.5, 0.7\}$ depinde de magnitudinea scorului static:
+
+\begin{itemize}
+    \item $w_{nr} \geq 85$: $w = 0.1$ — syscall-uri de risc maxim (module de kernel), regulile statice domină.
+    \item $w_{nr} \in [60, 85)$: $w = 0.2$ — syscall-uri de risc ridicat.
+    \item $w_{nr} \in [30, 60)$: $w = 0.5$ — syscall-uri de risc mediu, pondere egală.
+    \item $w_{nr} < 30$: $w = 0.7$ — syscall-uri comune, ML-ul are mai multă libertate.
+\end{itemize}
+
+\par Un floor de $0.5 \cdot \text{score}_{\text{static}}$ garantează că scorerul ML nu poate reduce scorul sub jumătatea valorii statice — prevenind falsa reducere a priorității evenimentelor cu risc dovedit ridicat.
+
+
+\section{Mașina de stări pentru carantinare}
+\label{sec:state_machine}
+
+\par Scorul de risc final este mapat la una din șase stări, conform pragurilor din Tabelul~\ref{tab:states}. Stările sunt ordonate crescător: OK $\rightarrow$ WATCH $\rightarrow$ WARN $\rightarrow$ THROTTLE $\rightarrow$ ISOLATE $\rightarrow$ FREEZE.
+
+\begin{table}[htbp]
+\begin{center}
+\begin{tabular}{|p{65pt}|p{70pt}|p{175pt}|}
+\hline
+\textbf{Stare} & \textbf{Prag scor} & \textbf{Acțiune aplicată} \\
+\hline\hline
+OK       & $< 30$   & Eveniment filtrat, nicio acțiune \\
+\hline
+WATCH    & $\geq 30$ & Eveniment jurnalizat în baza de date \\
+\hline
+WARN     & $\geq 50$ & Alertare; eveniment vizibil în dashboard \\
+\hline
+THROTTLE & $\geq 70$ & CPU limitat la 10\% prin \texttt{cpu.max} în cgroup v2 \\
+\hline
+ISOLATE  & $\geq 85$ & Memorie limitată 256 MiB + rețea blocată prin nftables \\
+\hline
+FREEZE   & $\geq 95$ & SIGSTOP + \texttt{cgroup.freeze}; auto-unfreeze la 5 min \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Mașina de stări: praguri de scor și acțiuni de carantinare corespunzătoare}
+\label{tab:states}
+\end{table}
+
+\par Pragurile au fost calibrate astfel încât:
+\begin{itemize}
+    \item Syscall-urile comune cu root (ex: \texttt{openat} cu $w = 5 \times 1.3 = 6.5$) să nu producă alerte.
+    \item Operațiile de rețea izolate (\texttt{connect}, $w = 15$) să ajungă la WATCH.
+    \item O rafală de conexiuni (\texttt{connect} burst, scor 75) să producă THROTTLE.
+    \item Instalarea unui modul de kernel (\texttt{finit\_module}, $w = 95 \times 1.3 = 123.5$ clamped la 95) să producă FREEZE imediat.
+\end{itemize}
+
+\par Izolarea de rețea în starea ISOLATE se realizează prin nftables: managerul creează un tabel \texttt{inet sentinel\_quarantine} cu reguli de drop pe traficul de ieșire și intrare filtrat după inodeul cgroup-ului procesului carantinat. Această abordare blochează selectiv un singur cgroup, fără a afecta restul proceselor de pe sistem.
+
+
+\section{Schema bazei de date}
+\label{sec:db_schema}
+
+\par Sentinelul utilizează SQLite în modul WAL (Write-Ahead Logging) cu timeout de 5 secunde (\texttt{\_busy\_timeout=5000}) pentru a permite accesul concurrent dintre daemon și managerul de carantinare fără blocaje. Izolarea de rețea prin nftables și cgroup inode urmează modelul conceptual al managerului de carantinare descris de Menage \cite{Menage2007}, care recunoaște că restricțiile de resurse trebuie să fie granulare la nivel de grup de procese, nu de utilizator sau sesiune. SQLite WAL permite citiri concurente cu o scriere activă, ceea ce satisface modelul de acces al sistemului: daemonul scrie continuu, managerul citește periodic.
+
+\par Sunt menținute două tabele principale:
+
+\begin{itemize}
+    \item \texttt{events}: stochează fiecare eveniment detectat cu câmpurile \texttt{alert\_type}, \texttt{score}, \texttt{state}, \texttt{pid}, \texttt{comm}, \texttt{timestamp} (ISO 8601) și \texttt{detail} (JSON cu câmpurile \texttt{ts\_ns}, \texttt{syscall\_name}, \texttt{fname}, \texttt{source}). Câmpul \texttt{source} poate fi \texttt{"kprobe"} sau \texttt{"synthetic"}, permițând filtrarea evenimentelor din testele automatizate.
+    \item \texttt{quarantine\_log}: jurnalizează acțiunile aplicate cu câmpurile \texttt{event\_id} (cheie externă), \texttt{pid}, \texttt{comm}, \texttt{prior\_state}, \texttt{actions} (JSON array cu acțiunile efectuate), \texttt{success}, \texttt{error} și \texttt{latency\_ms}.
+\end{itemize}
+
+\par Câmpul \texttt{latency\_ms} din \texttt{quarantine\_log} înregistrează durata totală de aplicare a acțiunilor de containment, de la selectarea evenimentului până la confirmarea acțiunilor, permițând validarea cerinței nefuncționale RN2.

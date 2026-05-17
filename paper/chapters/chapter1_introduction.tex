@@ -1,0 +1,53 @@
+\chapter{Introducere}
+\label{intro}
+
+\par Securitatea sistemelor de operare bazate pe Linux a dobândit o importanță crescândă pe măsură ce aceste sisteme au ajuns să susțină infrastructuri critice: servere web, platforme de containere, sisteme de calcul de înaltă performanță și dispozitive IoT. Creșterea numărului de atacuri direcționate împotriva nucleului Linux — rootkit-uri, tehnici de injecție de procese, escaladare de privilegii și execuție fileless — impune soluții de detecție capabile să opereze la nivelul cel mai profund al stivei software, fără a introduce latențe inacceptabile sau vulnerabilități suplimentare.
+
+\par Lucrarea de față descrie proiectarea și implementarea sistemului \textit{Sentinel}, un sistem de detectare și răspuns la intruziuni bazat pe tehnologia \textit{extended Berkeley Packet Filter} (eBPF). Sistemul interceptează apeluri de sistem la nivel de kernel prin mecanismul kprobe, calculează un scor de risc compus pentru fiecare eveniment detectat și aplică automat acțiuni graduale de containment al proceselor suspectate. Sentinel funcționează fără a modifica codul kernel-ului și fără a fi necesară repornirea sistemului — proprietăți esențiale pentru medii de producție.
+
+
+\section{Contextul și motivația}
+
+\par Instrumentele tradiționale de monitorizare a securității, cum ar fi demonul de audit Linux \texttt{auditd} \cite{LinuxAudit} sau sistemul Snort bazat pe semnături de rețea \cite{Roesch1999}, au demonstrat limitări documentate în fața atacurilor sofisticate care operează exclusiv în memorie sau care manipulează structurile interne ale kernel-ului \cite{Cozzi2018}. Abordările bazate pe analiza jurnalelor suferă de o latență inerentă: evenimentul este produs, jurnalizat, scris pe disc și abia apoi analizat, permițând atacatorilor o fereastră de acțiune neobservată de ordinul secundelor sau minutelor.
+
+\par eBPF oferă o paradigmă diferită. Programele eBPF se execută într-un sandbox verificat formal al kernel-ului Linux, atașate la puncte de instrumentare (kprobes, tracepoints, uprobes) cu o suprasarcină de ordinul zecilor de nanosecunde per eveniment \cite{Gregg2019}. Aceasta permite vizibilitate completă, în timp real, asupra comportamentului oricărui proces, fără modificarea kernel-ului sau instalarea de module de kernel suplimentare.
+
+\par Complementar, metodele de detecție a anomaliilor bazate pe învățare automată — în special algoritmul Isolation Forest \cite{Liu2008IF} — s-au dovedit eficiente pentru identificarea comportamentelor atipice în spații de caracteristici de dimensionalitate medie, inclusiv în contextul securității informatice \cite{Buczak2016}. Integrarea unui scorer ML cu un agent de detecție bazat pe eBPF formează o arhitectură hibridă care combină viteza și determinismul regulilor statice cu capacitatea de generalizare a modelelor statistice.
+
+
+\section{Enunțul problemei}
+
+\par Problema adresată de această lucrare poate fi formulată astfel: \textit{cum poate fi proiectat un sistem de detectare și răspuns la intruziuni pentru Linux care (a) operează la nivel de kernel fără a-l modifica, (b) clasifică evenimentele de securitate în timp real pe baza unui scor de risc compus și (c) aplică automat acțiuni de containment proporționale cu severitatea detectată, cu o latență de răspuns sub cinci milisecunde?}
+
+\par Validarea empirică se realizează printr-o suită de 21 de scenarii de atac reproductibile, ce acoperă principalele categorii de amenințări documentate în literatura de specialitate: rootkit-uri de kernel, escaladare de privilegii, injecție de procese, exfiltrare de date în rețea, persistență și execuție fileless.
+
+
+\section{Obiectivele lucrării}
+
+\par Obiectivele principale ale lucrării sunt:
+
+\begin{itemize}
+    \item Proiectarea și implementarea unui program eBPF pentru intercepția selectivă a apelurilor de sistem relevante din perspectiva securității, cu suprasarcină minimă asupra sistemului.
+    \item Construirea unui motor de scoring hibrid care combină ponderi statice per syscall, detecție a activității în rafale (burst detection) și un scorer ML bazat pe Isolation Forest, retrenabil la cald.
+    \item Implementarea unui agent de carantinare care aplică acțiuni de izolare graduale — limitare CPU, izolare de rețea, înghețarea procesului — prin mecanismele cgroup v2 și nftables.
+    \item Validarea întregului sistem printr-o suită de teste automatizate ce rulează 21 de scenarii de atac într-un mediu izolat bazat pe mașini virtuale Vagrant.
+\end{itemize}
+
+
+\section{Contribuții originale}
+
+\par Contribuțiile originale ale lucrării sunt:
+
+\begin{enumerate}
+    \item \textbf{Un motor de scoring cu trei straturi}: ponderi statice ponderate per syscall, detectare a activității în rafale cu fereastră glisantă și scorer Isolation Forest retrenabil prin API REST, cu un mecanism de combinare ponderată a scorurilor care previne degradarea excesivă a scorului bazal.
+    \item \textbf{O mașină de stări cu șase nivele} (OK / WATCH / WARN / THROTTLE / ISOLATE / FREEZE) care decuplează detecția de răspuns, permițând acțiuni proporționale cu severitatea detectată și auto-dezghețarea proceselor înghețate după un interval configurabil.
+    \item \textbf{O suită de 21 de scenarii de atac reproductibile}, distribuite ca artefacte de testare, care acoperă vectori de atac documentați în literatura de specialitate — de la rootkit-uri tip Diamorphine până la tehnici de execuție fileless și rootkit-uri eBPF de tip TripleCross.
+    \item \textbf{Mecanismul de izolare de rețea bazat pe cgroup inode}: procesele carantinate sunt blocate în rețea prin reguli nftables care filtrează traficul după inodeul cgroup-ului, fără a afecta restul proceselor de pe sistem.
+\end{enumerate}
+
+
+\section{Structura lucrării}
+
+\par Capitolul~\ref{chap:ch2} prezintă fundamentele teoretice: modelul de securitate Linux (apeluri de sistem, Linux Security Modules, namespaces și cgroups), arhitectura eBPF, taxonomia sistemelor de detectare a intruziunilor, bazele algoritmului Isolation Forest și o analiză comparativă a instrumentelor existente. Capitolul~\ref{chap:ch3} descrie analiza cerințelor și proiectarea detaliată a componentelor sistemului, inclusiv motorul de scoring și mașina de stări pentru carantinare. Capitolul~\ref{chap:ch4} acoperă implementarea concretă și rezultatele testării cu suita de 21 de atacuri. Capitolul~\ref{conclusions} sintetizează concluziile și direcțiile de cercetare viitoare.
+
+\par \textit{Notă privind utilizarea instrumentelor de inteligență artificială}: la redactarea unor secțiuni ale acestei lucrări a fost utilizat asistentul Claude (Anthropic) pentru reformularea și îmbunătățirea lizibilității paragrafelor tehnice. Întregul conținut tehnic, implementarea software și rezultatele experimentale aparțin exclusiv autorului lucrării.

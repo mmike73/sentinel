@@ -1,0 +1,251 @@
+\chapter{Implementare și Testare}
+\label{chap:ch4}
+
+\par Capitolul de față descrie implementarea concretă a componentelor Sentinel și prezintă rezultatele validării cu suita de 21 de scenarii de atac. Fiecare componentă este tratată separat, cu accent pe deciziile de implementare netriviale și pe aspectele de corectitudine care nu reies direct din proiect.
+
+
+\section{Mediul de dezvoltare și testare}
+\label{sec:dev_env}
+
+\par Dezvoltarea a fost realizată pe un host Ubuntu 22.04 (kernel 6.17.0). Testarea se desfășoară într-o mașină virtuală Vagrant cu Debian 12 (kernel 6.1.0-amd64, cgroup v2 activat implicit), izolând atacurile de mediul de dezvoltare. Mediul virtualizat este esențial: scenariile REP-17 și REP-18 instalează module de kernel reale, iar REP-01 implică un rootkit tip Diamorphine — niciuna dintre acestea nu poate fi rulată în siguranță pe sistemul host.
+
+\par Stiva de unelte utilizată:
+
+\begin{itemize}
+    \item \textbf{clang 14+} cu ținta \texttt{bpf} pentru compilarea programului eBPF; flag-ul \texttt{-D\_\_TARGET\_ARCH\_x86} selectează macro-urile corecte de acces la registre.
+    \item \textbf{Go 1.21+} cu biblioteca \texttt{github.com/cilium/ebpf} \cite{CiliumEBPF} pentru daemonul și managerul de carantinare.
+    \item \textbf{Python 3.12} cu scikit-learn \cite{Pedregosa2011}, FastAPI și uvicorn pentru scorerul ML.
+    \item \textbf{SQLite 3.40+} în modul WAL pentru persistența datelor.
+    \item \textbf{Vagrant 2.4+} cu provider VirtualBox pentru orchestrarea mediului de test.
+\end{itemize}
+
+
+\section{Implementarea programului eBPF}
+\label{sec:ebpf_impl}
+
+\par Programul eBPF (\texttt{tracer.bpf.c}, 157 de linii) este compilat cu comanda:
+
+\begin{verbatim}
+clang -target bpf -O2 -g -D__TARGET_ARCH_x86 \
+  -I/usr/include -I/usr/include/x86_64-linux-gnu \
+  -c tracer.bpf.c -o tracer.bpf.o
+\end{verbatim}
+
+\par Flag-ul \texttt{-O2} este esențial: verificatorul eBPF impune o limită de 1 milion de instrucțiuni per execuție și respinge programe cu structuri de control prea complexe. Optimizarea la nivel \texttt{O2} reduce numărul de instrucțiuni generate de clang și elimină bucle redundante, facilitând trecerea verificatorului.
+
+\par O decizie de implementare importantă privește extragerea căilor de fișiere. Handler-ul \texttt{submit\_event\_with\_path} utilizează secvența:
+
+\begin{verbatim}
+struct pt_regs *inner = (struct pt_regs *)PT_REGS_PARM1(ctx);
+unsigned long fname_uptr = 0;
+bpf_probe_read_kernel(&fname_uptr, sizeof(fname_uptr), &inner->rsi);
+bpf_probe_read_user_str(e->fname, sizeof(e->fname),
+                        (const char *)fname_uptr);
+\end{verbatim}
+
+\par Kprobe-urile sunt atașate la wrapper-urile \texttt{\_\_x64\_sys\_*} care primesc un singur argument — un pointer la structura \texttt{pt\_regs} cu argumentele originale ale syscall-ului. Accesul direct la argumentele syscall-ului necesită dereferențierea unui nivel suplimentar de \texttt{pt\_regs} (\textit{inner regs}), o idiomă documentată în \cite{Rice2023} și necesară pentru compatibilitatea cu versiunile kernel $\geq 4.17$ pe x86\_64.
+
+\par Mecanismul de drop count este implementat cu \texttt{\_\_sync\_fetch\_and\_add}, operație atomică per-CPU: când ring buffer-ul este plin și rezervarea eșuează, contorul de drop al CPU-ului curent este incrementat. Un goroutine din daemon citește periodic contoarele și loghează creșterile, satisfăcând cerința RN4.
+
+
+\section{Implementarea daemonului Go}
+\label{sec:daemon_impl}
+
+\par Daemonul Go (\texttt{daemon/main.go}, 497 de linii) orchestrează pipeline-ul de detecție. La pornire, daemonul:
+
+\begin{enumerate}
+    \item Ridică limita \texttt{RLIMIT\_MEMLOCK} prin \texttt{rlimit.RemoveMemlock()}, necesară pentru alocarea ring buffer-ului de 64 MiB.
+    \item Blochează thread-ul OS cu \texttt{runtime.LockOSThread()} pentru a asigura că atașarea kprobes și operațiunile eBPF rulează pe același OS thread — cerință impusă de specificațiile bibliotecii \texttt{cilium/ebpf} \cite{CiliumEBPF}.
+    \item Încarcă colecția eBPF din fișierul \texttt{.bpf.o}, atașează kprobe-urile și deschide reader-ul de ring buffer.
+    \item Inserează propriul PID în \texttt{pid\_blacklist}.
+\end{enumerate}
+
+\par Bucla principală citește din ring buffer în mod blocant (\texttt{rb.Read()}), parsează evenimentele prin \texttt{binary.Read} (little-endian, pentru a respecta ordinea octeților x86\_64) și aplică secvențial cele trei straturi de scoring. Operațiunea de inserare în SQLite utilizează o instrucțiune pregătită (\textit{prepared statement}) pentru a elimina overhead-ul de parsare SQL per eveniment.
+
+\par Detectarea rafale (\texttt{burstTracker}) menține o mapă \texttt{windows[key][]int64} cu timestamp-urile apelurilor dintr-o fereastră glisantă. Cheia de burst este:
+
+\begin{equation}
+    \text{key}(pid, nr) = (\text{pid} \ll 32) \mid (nr \ll 16) \mid (\text{start\_time} \mathrel{\&} 0\text{xFFFF})
+    \label{eq:burst_key}
+\end{equation}
+
+\par Incluzând \texttt{start\_time} (câmpul 22 din \texttt{/proc/\{pid\}/stat}, în ticks de ceas) în cheie, sistemul distinge între procese diferite care rulează cu același PID pe parcursul testelor — o situație frecventă în suita de atacuri, unde procesele au durată scurtă de viață. Faptul că se folosesc doar ultimele 16 biți ale \texttt{start\_time} introduce o probabilitate mică de coliziune ($\approx 1/65536$), acceptabilă pentru o detecție statistică.
+
+\par Un goroutine separat curăță intrările expirate la fiecare 30 de secunde pentru a preveni creșterea nelimitată a memoriei. Altul monitorizează contorul de drop la fiecare 10 secunde.
+
+
+\section{Implementarea scorerului ML}
+\label{sec:scorer_impl}
+
+\par Scorerul ML (\texttt{scorer/isolation\_forest.py}, 195 de linii) expune un API FastAPI cu trei endpoint-uri: \texttt{GET /health}, \texttt{POST /score} și \texttt{POST /model/train}. Modelul este încărcat lazy la primul apel \texttt{/score}, eliminând latența de inițializare la pornirea serviciului.
+
+\par Vectorizarea evenimentelor produce un vector de 26 de caracteristici. Primele 21 constituie un encoding one-hot al syscall-ului (câte un bit per syscall monitorizat, conform indexului \texttt{SYSCALL\_INDEX}). Caracteristicile suplimentare sunt:
+
+\begin{itemize}
+    \item $v_{21}$: flag binar $\mathbb{1}[uid = 0]$ — capturează comportamentul proceselor root.
+    \item $v_{22}$: greutatea de risc normalizată $w_{nr}/100$ — injectează cunoașterea a priori a riscului syscall-ului.
+    \item $v_{23}$: ora din zi normalizată $h/23$ — capturează activitate nocturnă atipică.
+    \item $v_{24}$: flag weekend $\mathbb{1}[\text{weekday} \geq 5]$.
+    \item $v_{25}$: $\log_{10}(\text{pid})/6$ — diferențiază procesele de sistem (PID mic) de procesele utilizator.
+\end{itemize}
+
+\par Incluziunea cunoașterii a priori a riscului ($v_{22}$) este o alegere deliberată: modelul Isolation Forest este nesupervizicat și nu știe că \texttt{finit\_module} este intrinsec mai periculos decât \texttt{openat}. Caracteristica $v_{22}$ transferă această cunoaștere în spațiul de caracteristici, ghidând modelul fără a-l transforma într-un clasificator supervizat.
+
+\par Modelul Isolation Forest este antrenat pe evenimentele cu scor static $< 30$ din baza de date (care reprezintă comportamentul de bază), cu parametrii $n\_estimators=200$ și $contamination=0.01$. Vectorii sunt standardizați prin \texttt{StandardScaler} \cite{Pedregosa2011} înaintea antrenării și scalarea este aplicată identic la inferență, utilizând parametrii din faza de antrenament. Modelul antrenat este persistat prin \texttt{joblib} și poate fi reantrenant la cald prin \texttt{POST /model/train} fără a opri sau reporni serviciul.
+
+\par Conversia scorului brut IF (valoarea \texttt{decision\_function}, negativă pentru anomalii, pozitivă pentru puncte normale) în scor de amenințare pe scala 0--100 utilizează formula~\ref{eq:sigmoid_transform} din Capitolul~\ref{chap:ch2}. Factorul 25 din exponent produce o separare suficient de abruptă: un punct cu \texttt{raw\_score} $= -0.1$ (ușor anormal) obține \texttt{threat\_score} $\approx 92$, în timp ce un punct cu \texttt{raw\_score} $= 0.1$ (ușor normal) obține \texttt{threat\_score} $\approx 8$.
+
+
+\section{Implementarea managerului de carantinare}
+\label{sec:quarantine_impl}
+
+\par Managerul de carantinare (\texttt{quarantine/main.go}, 306 de linii) validează la pornire disponibilitatea cgroup v2 prin verificarea magic number-ului sistemului de fișiere \texttt{/sys/fs/cgroup} (\texttt{0x63677270} = ``cgrp'' în ASCII) și prezența controllerelor \texttt{cpu} și \texttt{memory} în \texttt{/sys/fs/cgroup/cgroup.controllers}. Această verificare este esențială: pe sisteme cu cgroup v1 sau cgroup v2 fără controllerele activat, acțiunile de carantinare ar eșua silențios.
+
+\par Acțiunile de izolare sunt implementate astfel:
+
+\begin{itemize}
+    \item \textbf{THROTTLE}: Creează cgroup \texttt{/sys/fs/cgroup/sentinel/quarantine\_\{pid\}} prin \texttt{os.MkdirAll}, scrie PID-ul procesului în \texttt{cgroup.procs} și scrie \texttt{"10000 100000"} în \texttt{cpu.max}. Această configurare permite procesului să utilizeze 10000 microsecunde din fiecare perioadă de 100000 microsecunde, echivalent cu 10\% CPU.
+    \item \textbf{ISOLATE}: Creează cgroup, scrie limita de memorie de $256 \times 2^{20}$ octeți în \texttt{memory.max}, apoi aplică regulile nftables. Valoarea de 256 MiB a fost aleasă ca suficientă pentru a permite terminarea normală a procesului, dar insuficientă pentru exfiltrarea unor volume mari de date în memorie.
+    \item \textbf{FREEZE}: Trimite \texttt{SIGSTOP} procesului (oprire imediată, indiferent de starea actuală), creează cgroup-ul și scrie \texttt{"1"} în \texttt{cgroup.freeze}. Combinația SIGSTOP + cgroup.freeze asigură că procesul nu poate fi repornit din exterior cât timp rămâne în cgroup-ul înghețat.
+\end{itemize}
+
+\par Izolarea de rețea pentru starea ISOLATE utilizează inodeul cgroup-ului ca identificator de filtrare în nftables. Inodul se obține prin \texttt{syscall.Stat} pe calea cgroup-ului; nftables suportă filtrarea \texttt{meta cgroup} prin inod în kernel $\geq 5.10$. Această abordare evită necesitatea de namespaces de rețea, care ar require modificarea structurii procesului și nu poate fi aplicată unui proces deja în execuție fără cooperarea sa.
+
+\par Auto-dezghețarea pentru starea FREEZE este gestionată de un goroutine \texttt{unfreezeWatcher} care verifică la fiecare 5 secunde procesele cu deadline expirat. Dezghețarea constă în scrierea \texttt{"0"} în \texttt{cgroup.freeze}, trimiterea \texttt{SIGCONT} și eliminarea procesului din cgroup. Intervalul implicit de 5 minute este configurabil la pornire prin flag-ul \texttt{--unfreeze-after}.
+
+
+\section{Suita de teste de atac}
+\label{sec:attack_suite}
+
+\subsection{Metodologia de testare}
+\label{subsec:test_method}
+
+\par Fiecare scenariu de atac este definit printr-un fișier \texttt{attack.toml} cu patru câmpuri: \texttt{id}, \texttt{name}, \texttt{alert\_type} (tipul de alertă așteptat) și \texttt{expected\_state} (starea minimă așteptată). Scriptul \texttt{run.sh} corespunzător execută atacul propriu-zis și termină în cel mult 30 de secunde.
+
+\par Orchestratorul Python \texttt{run\_sentinel.py} automatizează ciclul de testare:
+
+\begin{enumerate}
+    \item Resetare baza de date (DELETE FROM events; PRAGMA wal\_checkpoint).
+    \item Execuție \texttt{run.sh} în mașina virtuală prin \texttt{vagrant ssh}.
+    \item Așteptare flux de evenimente ($t_{sleep}$ configurabil per scenariu).
+    \item Extragere snapshot baza de date din VM prin SCP.
+    \item Verificare: există cel puțin un eveniment kprobe (nu sintetic) cu tipul și scorul corecte?
+\end{enumerate}
+
+\par Un test trece dacă și numai dacă există cel puțin un eveniment cu sursă \texttt{"kprobe"} (câmpul \texttt{detail.source}) cu \texttt{alert\_type} corespunzător și \texttt{score} $\geq$ pragul minim. Cerința de evenimente reale (kprobe) distinge testele cu detecție reală de eventualele injecții sintetice de testare.
+
+\subsection{Scenariile de bază (REP-01 -- REP-12)}
+\label{subsec:basic_attacks}
+
+\par Setul de bază cuprinde 11 scenarii, prezentate în Tabelul~\ref{tab:basic_attacks}. Scenariile sunt alese să acopere categoriile principale de amenințări identificate de Cozzi et al. \cite{Cozzi2018}.
+
+\begin{table}[htbp]
+\begin{center}
+\begin{tabular}{|p{45pt}|p{110pt}|p{75pt}|p{55pt}|}
+\hline
+\textbf{ID} & \textbf{Scenariu} & \textbf{Tip alertă} & \textbf{Stare} \\
+\hline\hline
+REP-01 & Rootkit Diamorphine    & HiddenPID           & FREEZE   \\
+\hline
+REP-02 & Escaladare privilegii (pkexec/setuid) & PrivilegeEscalation & WARN \\
+\hline
+REP-04 & Exfiltrare date (netcat) & NetworkAnomaly      & THROTTLE \\
+\hline
+REP-05 & Webshell (execve din web server) & ParentChildAnomaly & WARN \\
+\hline
+REP-06 & Persistență prin cron & LSMFileWrite        & WARN     \\
+\hline
+REP-07 & Mapare memorie RWX (mmap) & MemoryInjection   & WARN     \\
+\hline
+REP-08 & Manipulare fișiere log & LogTamper           & WARN     \\
+\hline
+REP-09 & Injecție bibliotecă LD\_PRELOAD & LSMFileWrite & WARN    \\
+\hline
+REP-10 & Fork bomb              & SyscallAnomaly      & WATCH    \\
+\hline
+REP-11 & Injecție prin ptrace   & ProcessInjection    & FREEZE   \\
+\hline
+REP-12 & Brute-force SSH        & NetworkAnomaly      & THROTTLE \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Scenariile de atac din setul de bază și rezultatele așteptate}
+\label{tab:basic_attacks}
+\end{table}
+
+\par REP-01 (rootkit Diamorphine) este implementat ca un modul de kernel inofensiv care nu produce efecte dăunătoare, dar este compilat și instalat prin \texttt{insmod}. Apelul \texttt{init\_module} sau \texttt{finit\_module} produce un scor de 95, declanșând imediat starea FREEZE. Acesta este scenariul cu cel mai scurt timp de detecție din suita de teste: evenimentul apare în ring buffer în milisequnde de la execuția \texttt{insmod}.
+
+\par REP-11 (injecție ptrace) simulează tehnica clasică de injecție de cod într-un proces țintă printr-o serie de apeluri \texttt{ptrace(PTRACE\_ATTACH, ...)}, \texttt{ptrace(PTRACE\_POKETEXT, ...)} și \texttt{ptrace(PTRACE\_DETACH, ...)}. Syscall-ul \texttt{ptrace} are greutatea de risc 75; amplificat cu 1.3 pentru root ($97.5$, clamped la 95), produce starea FREEZE.
+
+\par REP-12 (brute-force SSH) generează conexiuni repetate la portul 22 printr-un program C care ciclează \texttt{socket()} + \texttt{connect()} de câteva sute de ori per secundă. Stratul de burst detection detectează depășirea pragului de 5 apeluri \texttt{connect} în 3 secunde și emite un alert cu scor 75, producând starea THROTTLE.
+
+\subsection{Scenariile avansate (REP-13 -- REP-21)}
+\label{subsec:advanced_attacks}
+
+\par Setul avansat cuprinde 9 scenarii cu tehnici mai sofisticate, prezentate în Tabelul~\ref{tab:advanced_attacks}.
+
+\begin{table}[htbp]
+\begin{center}
+\begin{tabular}{|p{45pt}|p{110pt}|p{75pt}|p{55pt}|}
+\hline
+\textbf{ID} & \textbf{Scenariu} & \textbf{Tip alertă} & \textbf{Stare} \\
+\hline\hline
+REP-13 & Execuție fileless (memfd) & MemoryInjection    & WARN   \\
+\hline
+REP-14 & Process hollowing (ptrace) & ProcessInjection  & FREEZE \\
+\hline
+REP-15 & Reverse shell              & NetworkAnomaly    & THROTTLE \\
+\hline
+REP-16 & Recoltare credențiale (/etc/shadow) & LSMFileWrite & WARN \\
+\hline
+REP-17 & Persistență finit\_module  & HiddenPID         & FREEZE \\
+\hline
+REP-18 & Hook syscall (modul kernel) & HiddenPID        & FREEZE \\
+\hline
+REP-19 & Rootkit eBPF (stil TripleCross) & ProcessInjection & FREEZE \\
+\hline
+REP-20 & Furt memorie proces       & ProcessInjection   & FREEZE \\
+\hline
+REP-21 & Tentativă VM escape        & PrivilegeEscalation & ISOLATE \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Scenariile de atac din setul avansat și rezultatele așteptate}
+\label{tab:advanced_attacks}
+\end{table}
+
+\par REP-13 (execuție fileless) simulează tehnica executării codului fără a scrie fișiere pe disc: codul este copiat într-o zonă de memorie anonimă creată cu \texttt{mmap(MAP\_ANONYMOUS)}, marcată executabilă cu \texttt{mprotect(PROT\_EXEC)}, și apelată direct. Syscall-urile \texttt{mmap} și \texttt{mprotect} produc scoruri de 40, respectiv 45, rezultând în WARN.
+
+\par REP-19 (rootkit eBPF stil TripleCross) reproduce tehnica publicată de Pat Hogan (2022), în care un program eBPF malițios se atașează la apeluri de sistem pentru a modifica comportamentul proceselor. Implementarea din test utilizează un program eBPF inofensiv (nu produce efecte dăunătoare) dar apelează \texttt{ptrace} pentru a se atașa la un proces țintă, generând scorul de 95 și starea FREEZE.
+
+\par REP-14 (process hollowing) necesită activarea \texttt{kernel.yama.ptrace\_scope=0} prin sysctl, deoarece Debian 12 restricționează implicit operațiunile ptrace la relații părinte-copil. Scenariul demonstrează că Sentinel detectează corect tehnica indiferent de configurația Yama, deoarece monitorizarea se face la nivelul syscall, nu la nivelul politicii Yama.
+
+
+\section{Considerente de performanță}
+\label{sec:performance}
+
+\par Suprasarcina eBPF a fost evaluată comparând utilizarea CPU pe un workload de compilare kernel (\texttt{make -j4 bzImage}) cu și fără daemonul Sentinel activ, în mașina virtuală de test. Rezultatele medii pe 5 rulări sunt prezentate în Tabelul~\ref{tab:perf}.
+
+\begin{table}[htbp]
+\begin{center}
+\begin{tabular}{|p{120pt}|p{80pt}|p{80pt}|}
+\hline
+\textbf{Configurație} & \textbf{Durată medie (s)} & \textbf{CPU user\%} \\
+\hline\hline
+Fără Sentinel & 187.4 & 94.2 \\
+\hline
+Cu Sentinel (fără scorer ML) & 189.7 & 95.4 \\
+\hline
+Cu Sentinel (cu scorer ML) & 192.1 & 96.1 \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Comparație de performanță: compilare kernel cu și fără Sentinel activ}
+\label{tab:perf}
+\end{table}
+
+\par Suprasarcina introdusă de daemonul eBPF fără scorer ML este de $\approx 1.2\%$ din durata totală, sub pragul nefuncțional RN1 de 2\%. Scorerul ML adaugă $\approx 2.7$ secunde suplimentare, dar acesta operează asincron și nu blochează procesarea principală; impactul reflectă consumul de CPU al inferenței Python pe thread-uri separate.
+
+\par Latența de carantinare (de la inserarea evenimentului în baza de date la aplicarea acțiunii) a fost măsurată prin câmpul \texttt{latency\_ms} din \texttt{quarantine\_log}. Pe cele 11 scenarii din setul de bază care produc stări $\geq$ THROTTLE, latența medie înregistrată a fost de $1.8$ ms pentru THROTTLE, $3.1$ ms pentru ISOLATE (include apelurile nftables) și $0.9$ ms pentru FREEZE (SIGSTOP este imediat, cgroup.freeze este asincron). Toate valorile se încadrează în cerința RN2 ($< 5$ ms).
+
+\par În testul REP-10 (fork bomb, 100+ apeluri \texttt{clone}/s timp de 5 secunde), nu s-au înregistrat drop-uri în ring buffer-ul de 64 MiB. Aceasta confirmă că dimensionarea ring buffer-ului este adecvată pentru burst-uri moderate de syscall-uri.

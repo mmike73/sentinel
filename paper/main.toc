@@ -1,0 +1,48 @@
+\babel@toc {romanian}{}\relax 
+\contentsline {chapter}{\numberline {1}Introducere}{1}{chapter.1}%
+\contentsline {section}{\numberline {1.1}Contextul și motivația}{1}{section.1.1}%
+\contentsline {section}{\numberline {1.2}Enunțul problemei}{2}{section.1.2}%
+\contentsline {section}{\numberline {1.3}Obiectivele lucrării}{2}{section.1.3}%
+\contentsline {section}{\numberline {1.4}Contribuții originale}{3}{section.1.4}%
+\contentsline {section}{\numberline {1.5}Structura lucrării}{3}{section.1.5}%
+\contentsline {chapter}{\numberline {2}Fundamente Teoretice și Stadiul Artei}{4}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Modelul de securitate Linux}{4}{section.2.1}%
+\contentsline {subsection}{\numberline {2.1.1}Apeluri de sistem și frontiera kernel-utilizator}{4}{subsection.2.1.1}%
+\contentsline {subsection}{\numberline {2.1.2}Linux Security Modules}{5}{subsection.2.1.2}%
+\contentsline {subsection}{\numberline {2.1.3}Namespaces și grupuri de control (cgroups)}{5}{subsection.2.1.3}%
+\contentsline {section}{\numberline {2.2}Extended Berkeley Packet Filter (eBPF)}{6}{section.2.2}%
+\contentsline {subsection}{\numberline {2.2.1}Evoluție de la BPF clasic la eBPF}{6}{subsection.2.2.1}%
+\contentsline {subsection}{\numberline {2.2.2}Maps eBPF și mecanismul ring buffer}{6}{subsection.2.2.2}%
+\contentsline {subsection}{\numberline {2.2.3}Kprobes: instrumentarea dinamică a kernel-ului}{7}{subsection.2.2.3}%
+\contentsline {section}{\numberline {2.3}Sisteme de detectare a intruziunilor}{7}{section.2.3}%
+\contentsline {subsection}{\numberline {2.3.1}Taxonomie și clasificare}{7}{subsection.2.3.1}%
+\contentsline {subsection}{\numberline {2.3.2}Detecție bazată pe anomalii versus semnături}{8}{subsection.2.3.2}%
+\contentsline {section}{\numberline {2.4}Algoritmul Isolation Forest}{8}{section.2.4}%
+\contentsline {section}{\numberline {2.5}Instrumente existente și lucrări corelate}{9}{section.2.5}%
+\contentsline {chapter}{\numberline {3}Analiza și Proiectarea Sistemului Sentinel}{11}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Cerințe funcționale și nefuncționale}{11}{section.3.1}%
+\contentsline {section}{\numberline {3.2}Arhitectura sistemului}{12}{section.3.2}%
+\contentsline {section}{\numberline {3.3}Proiectarea programului eBPF}{12}{section.3.3}%
+\contentsline {section}{\numberline {3.4}Proiectarea motorului de scoring}{13}{section.3.4}%
+\contentsline {subsection}{\numberline {3.4.1}Stratul 1: Ponderi statice per syscall}{14}{subsection.3.4.1}%
+\contentsline {subsection}{\numberline {3.4.2}Stratul 2: Detectarea activității în rafale}{14}{subsection.3.4.2}%
+\contentsline {subsection}{\numberline {3.4.3}Stratul 3: Alerte bazate pe căi de fișiere}{15}{subsection.3.4.3}%
+\contentsline {subsection}{\numberline {3.4.4}Integrarea scorerului ML}{15}{subsection.3.4.4}%
+\contentsline {section}{\numberline {3.5}Mașina de stări pentru carantinare}{16}{section.3.5}%
+\contentsline {section}{\numberline {3.6}Schema bazei de date}{16}{section.3.6}%
+\contentsline {chapter}{\numberline {4}Implementare și Testare}{18}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Mediul de dezvoltare și testare}{18}{section.4.1}%
+\contentsline {section}{\numberline {4.2}Implementarea programului eBPF}{18}{section.4.2}%
+\contentsline {section}{\numberline {4.3}Implementarea daemonului Go}{19}{section.4.3}%
+\contentsline {section}{\numberline {4.4}Implementarea scorerului ML}{20}{section.4.4}%
+\contentsline {section}{\numberline {4.5}Implementarea managerului de carantinare}{21}{section.4.5}%
+\contentsline {section}{\numberline {4.6}Suita de teste de atac}{22}{section.4.6}%
+\contentsline {subsection}{\numberline {4.6.1}Metodologia de testare}{22}{subsection.4.6.1}%
+\contentsline {subsection}{\numberline {4.6.2}Scenariile de bază (REP-01 -- REP-12)}{23}{subsection.4.6.2}%
+\contentsline {subsection}{\numberline {4.6.3}Scenariile avansate (REP-13 -- REP-21)}{23}{subsection.4.6.3}%
+\contentsline {section}{\numberline {4.7}Considerente de performanță}{24}{section.4.7}%
+\contentsline {chapter}{\numberline {5}Concluzii}{26}{chapter.5}%
+\contentsline {section}{Contribuții originale}{26}{section*.2}%
+\contentsline {section}{Limitări}{27}{section*.3}%
+\contentsline {section}{Direcții de cercetare viitoare}{27}{section*.4}%
+\contentsline {chapter}{\bbl@ensure@romanian {Bibliografie}}{29}{chapter*.5}%

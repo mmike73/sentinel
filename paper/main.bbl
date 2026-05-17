@@ -1,0 +1,176 @@
+\newcommand{\etalchar}[1]{$^{#1}$}
+\begin{thebibliography}{GTDVMFV09}
+
+\bibitem[And80]{Anderson1980}
+James~P. Anderson.
+\newblock Computer security threat monitoring and surveillance.
+\newblock Technical report, James P. Anderson Company, Fort Washington,
+  Pennsylvania, 1980.
+\newblock Technical Report.
+
+\bibitem[Axe00]{Axelsson2000}
+Stefan Axelsson.
+\newblock Intrusion detection systems: A survey and taxonomy.
+\newblock Technical Report 99-15, Department of Computer Engineering, Chalmers
+  University of Technology, 2000.
+
+\bibitem[BG16]{Buczak2016}
+Anna~L. Buczak and Erhan Guven.
+\newblock A survey of data mining and machine learning methods for cyber
+  security intrusion detection.
+\newblock {\em IEEE Communications Surveys \& Tutorials}, 18(2):1153--1176,
+  2016.
+
+\bibitem[CBK09]{Chandola2009}
+Varun Chandola, Arindam Banerjee, and Vipin Kumar.
+\newblock Anomaly detection: A survey.
+\newblock {\em ACM Computing Surveys}, 41(3):15:1--15:58, 2009.
+
+\bibitem[CGFB18]{Cozzi2018}
+Emilio Cozzi, Mariano Graziano, Yanick Fratantonio, and Davide Balzarotti.
+\newblock Understanding linux malware.
+\newblock In {\em 2018 IEEE Symposium on Security and Privacy (S\&P)}, pages
+  161--175. IEEE, 2018.
+
+\bibitem[{Cil}24]{CiliumEBPF}
+{Cilium Project}.
+\newblock cilium/ebpf: Pure-go library to read, modify and load {eBPF} programs
+  and attach them to various hooks in the linux kernel.
+\newblock \url{https://github.com/cilium/ebpf}, 2024.
+\newblock Online; accessed May 2025.
+
+\bibitem[{Clo}24]{FalcoProject}
+{Cloud Native Computing Foundation}.
+\newblock Falco: Cloud native runtime security.
+\newblock \url{https://falco.org}, 2024.
+\newblock Online; accessed May 2025.
+
+\bibitem[CRKH05]{Corbet2005}
+Jonathan Corbet, Alessandro Rubini, and Greg Kroah-Hartman.
+\newblock {\em Linux Device Drivers}.
+\newblock O'Reilly Media, 3rd edition, 2005.
+
+\bibitem[Den87]{Denning1987}
+Dorothy~E. Denning.
+\newblock An intrusion-detection model.
+\newblock {\em IEEE Transactions on Software Engineering}, 13(2):222--232,
+  1987.
+
+\bibitem[GR03]{Garfinkel2003}
+Tal Garfinkel and Mendel Rosenblum.
+\newblock A virtual machine introspection based architecture for intrusion
+  detection.
+\newblock In {\em Proceedings of the Network and Distributed System Security
+  Symposium (NDSS 2003)}. The Internet Society, 2003.
+
+\bibitem[Gre19]{Gregg2019}
+Brendan Gregg.
+\newblock {\em {BPF} Performance Tools: Linux System and Application
+  Observability}.
+\newblock Addison-Wesley Professional, 2019.
+
+\bibitem[GTDVMFV09]{GarciaTe2009}
+Pedro Garcia-Teodoro, Jesus Diaz-Verdejo, Gabriel Maci{\'a}s-Fern{\'a}ndez, and
+  Enrique V{\'a}zquez.
+\newblock Anomaly-based network intrusion detection: Techniques, systems and
+  challenges.
+\newblock {\em Computers \& Security}, 28(1--2):18--28, 2009.
+
+\bibitem[GU16]{Goldstein2016}
+Markus Goldstein and Seiichi Uchida.
+\newblock A comparative evaluation of unsupervised anomaly detection algorithms
+  for multivariate data.
+\newblock {\em PLOS ONE}, 11(4):e0152173, 2016.
+
+\bibitem[Ker10]{Kerrisk2010}
+Michael Kerrisk.
+\newblock {\em The Linux Programming Interface: A Linux and {UNIX} System
+  Programming Handbook}.
+\newblock No Starch Press, San Francisco, CA, 2010.
+
+\bibitem[KPK12]{Kemerlis2012}
+Vasileios~P. Kemerlis, Georgios Portokalidis, and Angelos~D. Keromytis.
+\newblock kguard: Lightweight kernel protection against return-to-user attacks.
+\newblock In {\em Proceedings of the 21st USENIX Security Symposium}, pages
+  459--474. USENIX Association, 2012.
+
+\bibitem[{Lin}24]{LinuxAudit}
+{Linux Audit Project}.
+\newblock auditd --- the linux audit daemon.
+\newblock \url{https://github.com/linux-audit/audit-userspace}, 2024.
+\newblock Online; accessed May 2025.
+
+\bibitem[LMP{\etalchar{+}}14]{Lengyel2014}
+Tamas~K. Lengyel, Steve Maresca, Bryan~D. Payne, George~D. Webster, Sebastian
+  Vogl, and Aggelos Kiayias.
+\newblock Scalability, fidelity and stealth in the {DRAKVUF} dynamic malware
+  analysis system.
+\newblock In {\em Proceedings of the 30th Annual Computer Security Applications
+  Conference (ACSAC 2014)}, pages 386--395. ACM, 2014.
+
+\bibitem[Lov10]{Love2010}
+Robert Love.
+\newblock {\em Linux Kernel Development}.
+\newblock Addison-Wesley Professional, 3rd edition, 2010.
+
+\bibitem[LTZ08]{Liu2008IF}
+Fei~Tony Liu, Kai~Ming Ting, and Zhi-Hua Zhou.
+\newblock Isolation forest.
+\newblock In {\em 2008 Eighth IEEE International Conference on Data Mining
+  (ICDM)}, pages 413--422. IEEE, 2008.
+
+\bibitem[LTZ12]{Liu2012IF}
+Fei~Tony Liu, Kai~Ming Ting, and Zhi-Hua Zhou.
+\newblock Isolation-based anomaly detection.
+\newblock {\em ACM Transactions on Knowledge Discovery from Data},
+  6(1):3:1--3:39, 2012.
+
+\bibitem[Men07]{Menage2007}
+Paul Menage.
+\newblock Adding generic process containers to the linux kernel.
+\newblock In {\em Proceedings of the Linux Symposium}, volume~2, pages 45--57,
+  2007.
+
+\bibitem[MJ93]{McCanne1993}
+Steven McCanne and Van Jacobson.
+\newblock The {BSD} packet filter: A new architecture for user-level packet
+  capture.
+\newblock In {\em USENIX Winter Conference Proceedings}, pages 259--270. USENIX
+  Association, 1993.
+
+\bibitem[PVG{\etalchar{+}}11]{Pedregosa2011}
+Fabian Pedregosa, Ga{\"e}l Varoquaux, Alexandre Gramfort, Vincent Michel,
+  Bertrand Thirion, Olivier Grisel, Mathieu Blondel, Peter Prettenhofer, Ron
+  Weiss, Vincent Dubourg, Jake Vanderplas, Alexandre Passos, David Cournapeau,
+  Matthieu Brucher, Matthieu Perrot, and {\'E}douard Duchesnay.
+\newblock Scikit-learn: Machine learning in {Python}.
+\newblock {\em Journal of Machine Learning Research}, 12:2825--2830, 2011.
+
+\bibitem[Ric23]{Rice2023}
+Liz Rice.
+\newblock {\em Learning {eBPF}: Programming the Linux Kernel for Enhanced
+  Observability, Networking, and Security}.
+\newblock O'Reilly Media, 2023.
+
+\bibitem[Roe99]{Roesch1999}
+Martin Roesch.
+\newblock Snort --- lightweight intrusion detection for networks.
+\newblock In {\em Proceedings of the 13th USENIX Conference on System
+  Administration (LISA '99)}, pages 229--238. USENIX Association, 1999.
+
+\bibitem[VCP{\etalchar{+}}20]{Vieira2020}
+Marcos A.~M. Vieira, Matheus~S. Castanho, Raphael~D. Pac{\'i}fico, Elerson
+  R.~S. Santos, Eduardo P.~M. C{\^a}mara~J{\'u}nior, and Luiz F.~M. Vieira.
+\newblock Fast packet processing with {eBPF} and {XDP}: Concepts, code,
+  challenges, and applications.
+\newblock {\em ACM Computing Surveys}, 53(1):16:1--16:36, 2020.
+
+\bibitem[WCS{\etalchar{+}}02]{Wright2002}
+Chris Wright, Crispin Cowan, Stephen Smalley, James Morris, and Greg
+  Kroah-Hartman.
+\newblock Linux security modules: General security support for the linux
+  kernel.
+\newblock In {\em Proceedings of the 11th USENIX Security Symposium}, pages
+  17--31. USENIX Association, 2002.
+
+\end{thebibliography}
