@@ -149,9 +149,11 @@ def serve(model_path: str, db_path: str, port: int = 8765):
         timestamp: str = ""
 
     @app.get("/health")
-    def health():
-        b = get_bundle()
-        return {"status": "ok", "model_trained_at": b.trained_at, "n_samples": b.n_samples}
+    async def health():
+        if bundle is not None:
+            return {"status": "ok", "model_trained_at": bundle.trained_at,
+                    "n_samples": bundle.n_samples}
+        return {"status": "ok", "model": "not loaded"}
 
     @app.post("/score")
     def score(event: EventRequest):

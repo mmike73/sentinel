@@ -51,7 +51,7 @@ while true; do
         read -r score state pid comm <<< "$(cat "$trigger")"
         TS=$(date -u '+%Y-%m-%dT%H:%M:%S.000Z')
         echo "[injector] $TS INSERT alert=$ALERT_TYPE score=$score state=$state pid=$pid comm=$comm" >> "$LOG"
-        sqlite3 "$DB" "INSERT INTO events \
+        sqlite3 "$DB" "PRAGMA busy_timeout=5000; INSERT INTO events \
             (alert_type,score,state,pid,comm,timestamp,detail) VALUES \
             ('$ALERT_TYPE',$score,'$state',$pid,'$comm','$TS', \
             json_object('alert_type','$ALERT_TYPE','score',$score,'state','$state','pid',$pid,'comm','$comm'));" \
