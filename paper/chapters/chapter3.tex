@@ -15,13 +15,13 @@
     \item \textbf{RF3}: Clasificarea evenimentelor în șase stări de severitate, de la absența riscului (OK) la necesitatea înghețării imediate (FREEZE).
     \item \textbf{RF4}: Aplicarea automată a acțiunilor de carantinare proporționale cu starea detectată, prin mecanisme standard ale kernel-ului.
     \item \textbf{RF5}: Persistarea evenimentelor și a acțiunilor de carantinare într-o bază de date locală, accesibilă pentru analiză retrospectivă.
-    \item \textbf{RF6}: Expunerea unui API REST pentru integrarea unui scorer ML opțional, retrenabil fără oprirea sistemului.
+    \item \textbf{RF6}: Expunerea unui API REST pentru integrarea unui scorer ML opțional, care poate fi antrenat cu date actualizate fără oprirea sistemului.
 \end{itemize}
 
 \par Cerințele nefuncționale sunt:
 
 \begin{itemize}
-    \item \textbf{RN1}: Suprasarcina CPU introdusă de instrumentarea eBPF să fie sub 2\% pe un sistem cu activitate normală.
+    \item \textbf{RN1}: Penalizarea de performanță asupra procesorului (CPU) introdusă de instrumentarea eBPF să fie sub 2\% pe un sistem cu activitate normală.
     \item \textbf{RN2}: Latența de la detecție la aplicarea acțiunii de carantinare (fără scorer ML) să fie sub 5 ms.
     \item \textbf{RN3}: Sistemul să funcționeze pe kernel Linux $\geq 5.8$ cu cgroup v2 activat.
     \item \textbf{RN4}: Pierderea de evenimente la saturarea ring buffer-ului să fie monitorizabilă și raportată în timp real.
@@ -86,7 +86,7 @@
 \subsection{Stratul 1: Ponderi statice per syscall}
 \label{subsec:static_weights}
 
-\par Fiecărui apel de sistem îi este asociată o greutate statică de risc $w_{nr} \in [5, 95]$, calibrată pe baza empirică a lucrărilor \cite{Cozzi2018} și \cite{Buczak2016}. Greutățile extreme (95) sunt rezervate apelurilor \texttt{finit\_module} și \texttt{init\_module} — care nu au utilizare legitimă obișnuită în spațiul utilizator — iar greutățile minime (5) corespund apelurilor comune dar monitorizabile, cum ar fi \texttt{openat}. Dacă procesul rulează ca root ($uid = 0$), greutatea este amplificată cu factorul 1,3:
+\par Fiecărui apel de sistem îi este asociată o pondere statică de risc $w_{nr} \in [5, 95]$, calibrată pe baza empirică a lucrărilor \cite{Cozzi2018} și \cite{Buczak2016}. Greutățile extreme (95) sunt rezervate apelurilor \texttt{finit\_module} și \texttt{init\_module} — care nu au utilizare legitimă obișnuită în spațiul utilizator — iar greutățile minime (5) corespund apelurilor comune dar monitorizabile, cum ar fi \texttt{openat}. Dacă procesul rulează ca root ($uid = 0$), ponderea este amplificată cu factorul 1,3:
 
 \begin{equation}
     \text{score}_{\text{static}}(nr, uid) = w_{nr} \cdot \begin{cases} 1.3 & \text{dacă } uid = 0 \\ 1.0 & \text{altfel} \end{cases}
@@ -131,7 +131,7 @@
     \item Scriere sau ștergere în \texttt{/var/log/}: indicator LogTamper (scor 50).
     \item Deschidere sau scriere \texttt{/etc/cron*}: indicator LSMFileWrite (scor 50), acoperind tehnicile de persistență prin cron.
     \item Scriere în \texttt{/etc/passwd}, \texttt{/etc/shadow}, \texttt{/etc/sudoers}: indicator PrivilegeEscalation (scor 65), acoperind modificarea directă a bazei de autentificare.
-    \item Deschidere de fișier \texttt{.so} din \texttt{/tmp/}, \texttt{/dev/shm/}, \texttt{/run/}: indicator LSMFileWrite (scor 50), acoperind tehnicile de injecție de bibliotecă fileless.
+    \item Deschidere de fișier \texttt{.so} din \texttt{/tmp/}, \texttt{/dev/shm/}, \texttt{/run/}: indicator LSMFileWrite (scor 50), acoperind tehnicile de injecție de bibliotecă fără fișier.
 \end{itemize}
 
 \par Dacă stratul de path alerts produce un scor, acesta suprascrie scorul static (nu se adunează), prevenind o amplificare artificială.

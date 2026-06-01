@@ -83,7 +83,7 @@ bpf_probe_read_user_str(e->fname, sizeof(e->fname),
 
 \begin{itemize}
     \item $v_{21}$: flag binar $\mathbb{1}[uid = 0]$ — capturează comportamentul proceselor root.
-    \item $v_{22}$: greutatea de risc normalizată $w_{nr}/100$ — injectează cunoașterea a priori a riscului syscall-ului.
+    \item $v_{22}$: ponderea de risc normalizată $w_{nr}/100$ — injectează cunoașterea a priori a riscului syscall-ului.
     \item $v_{23}$: ora din zi normalizată $h/23$ — capturează activitate nocturnă atipică.
     \item $v_{24}$: flag weekend $\mathbb{1}[\text{weekday} \geq 5]$.
     \item $v_{25}$: $\log_{10}(\text{pid})/6$ — diferențiază procesele de sistem (PID mic) de procesele utilizator.
@@ -91,7 +91,7 @@ bpf_probe_read_user_str(e->fname, sizeof(e->fname),
 
 \par Incluziunea cunoașterii a priori a riscului ($v_{22}$) este o alegere deliberată: modelul Isolation Forest este nesupervizicat și nu știe că \texttt{finit\_module} este intrinsec mai periculos decât \texttt{openat}. Caracteristica $v_{22}$ transferă această cunoaștere în spațiul de caracteristici, ghidând modelul fără a-l transforma într-un clasificator supervizat.
 
-\par Modelul Isolation Forest este antrenat pe evenimentele cu scor static $< 30$ din baza de date (care reprezintă comportamentul de bază), cu parametrii $n\_estimators=200$ și $contamination=0.01$. Vectorii sunt standardizați prin \texttt{StandardScaler} \cite{Pedregosa2011} înaintea antrenării și scalarea este aplicată identic la inferență, utilizând parametrii din faza de antrenament. Modelul antrenat este persistat prin \texttt{joblib} și poate fi reantrenant la cald prin \texttt{POST /model/train} fără a opri sau reporni serviciul.
+\par Modelul Isolation Forest este antrenat pe evenimentele cu scor static $< 30$ din baza de date (care reprezintă comportamentul de bază), cu parametrii $n\_estimators=200$ și $contamination=0.01$. Vectorii sunt standardizați prin \texttt{StandardScaler} \cite{Pedregosa2011} înaintea antrenării și scalarea este aplicată identic la inferență, utilizând parametrii din faza de antrenament. Modelul antrenat este persistat prin \texttt{joblib} și poate fi antrenat cu date actualizate prin \texttt{POST /model/train} fără a opri sau reporni serviciul.
 
 \par Conversia scorului brut IF (valoarea \texttt{decision\_function}, negativă pentru anomalii, pozitivă pentru puncte normale) în scor de amenințare pe scala 0--100 utilizează formula~\ref{eq:sigmoid_transform} din Capitolul~\ref{chap:ch2}. Factorul 25 din exponent produce o separare suficient de abruptă: un punct cu \texttt{raw\_score} $= -0.1$ (ușor anormal) obține \texttt{threat\_score} $\approx 92$, în timp ce un punct cu \texttt{raw\_score} $= 0.1$ (ușor normal) obține \texttt{threat\_score} $\approx 8$.
 
@@ -175,7 +175,7 @@ REP-12 & Brute-force SSH        & NetworkAnomaly      & THROTTLE \\
 
 \par REP-01 (rootkit Diamorphine) este implementat ca un modul de kernel inofensiv care nu produce efecte dăunătoare, dar este compilat și instalat prin \texttt{insmod}. Apelul \texttt{init\_module} sau \texttt{finit\_module} produce un scor de 95, declanșând imediat starea FREEZE. Acesta este scenariul cu cel mai scurt timp de detecție din suita de teste: evenimentul apare în ring buffer în milisequnde de la execuția \texttt{insmod}.
 
-\par REP-11 (injecție ptrace) simulează tehnica clasică de injecție de cod într-un proces țintă printr-o serie de apeluri \texttt{ptrace(PTRACE\_ATTACH, ...)}, \texttt{ptrace(PTRACE\_POKETEXT, ...)} și \texttt{ptrace(PTRACE\_DETACH, ...)}. Syscall-ul \texttt{ptrace} are greutatea de risc 75; amplificat cu 1.3 pentru root ($97.5$, clamped la 95), produce starea FREEZE.
+\par REP-11 (injecție ptrace) simulează tehnica clasică de injecție de cod într-un proces țintă printr-o serie de apeluri \texttt{ptrace(PTRACE\_ATTACH, ...)}, \texttt{ptrace(PTRACE\_POKETEXT, ...)} și \texttt{ptrace(PTRACE\_DETACH, ...)}. Syscall-ul \texttt{ptrace} are ponderea de risc 75; amplificat cu 1.3 pentru root ($97.5$, clamped la 95), produce starea FREEZE.
 
 \par REP-12 (brute-force SSH) generează conexiuni repetate la portul 22 printr-un program C care ciclează \texttt{socket()} + \texttt{connect()} de câteva sute de ori per secundă. Stratul de burst detection detectează depășirea pragului de 5 apeluri \texttt{connect} în 3 secunde și emite un alert cu scor 75, producând starea THROTTLE.
 
@@ -190,7 +190,7 @@ REP-12 & Brute-force SSH        & NetworkAnomaly      & THROTTLE \\
 \hline
 \textbf{ID} & \textbf{Scenariu} & \textbf{Tip alertă} & \textbf{Stare} \\
 \hline\hline
-REP-13 & Execuție fileless (memfd) & MemoryInjection    & WARN   \\
+REP-13 & Execuție fără fișier (memfd) & MemoryInjection    & WARN   \\
 \hline
 REP-14 & Process hollowing (ptrace) & ProcessInjection  & FREEZE \\
 \hline
@@ -214,7 +214,7 @@ REP-21 & Tentativă VM escape        & PrivilegeEscalation & ISOLATE \\
 \label{tab:advanced_attacks}
 \end{table}
 
-\par REP-13 (execuție fileless) simulează tehnica executării codului fără a scrie fișiere pe disc: codul este copiat într-o zonă de memorie anonimă creată cu \texttt{mmap(MAP\_ANONYMOUS)}, marcată executabilă cu \texttt{mprotect(PROT\_EXEC)}, și apelată direct. Syscall-urile \texttt{mmap} și \texttt{mprotect} produc scoruri de 40, respectiv 45, rezultând în WARN.
+\par REP-13 (execuție fără fișier pe disc) simulează tehnica executării codului fără a scrie fișiere pe disc: codul este copiat într-o zonă de memorie anonimă creată cu \texttt{mmap(MAP\_ANONYMOUS)}, marcată executabilă cu \texttt{mprotect(PROT\_EXEC)}, și apelată direct. Syscall-urile \texttt{mmap} și \texttt{mprotect} produc scoruri de 40, respectiv 45, rezultând în WARN.
 
 \par REP-19 (rootkit eBPF stil TripleCross) reproduce tehnica publicată de Pat Hogan (2022), în care un program eBPF malițios se atașează la apeluri de sistem pentru a modifica comportamentul proceselor. Implementarea din test utilizează un program eBPF inofensiv (nu produce efecte dăunătoare) dar apelează \texttt{ptrace} pentru a se atașa la un proces țintă, generând scorul de 95 și starea FREEZE.
 
@@ -224,7 +224,7 @@ REP-21 & Tentativă VM escape        & PrivilegeEscalation & ISOLATE \\
 \section{Considerente de performanță}
 \label{sec:performance}
 
-\par Suprasarcina eBPF a fost evaluată comparând utilizarea CPU pe un workload de compilare kernel (\texttt{make -j4 bzImage}) cu și fără daemonul Sentinel activ, în mașina virtuală de test. Rezultatele medii pe 5 rulări sunt prezentate în Tabelul~\ref{tab:perf}.
+\par Penalizarea de performanță a eBPF a fost evaluată comparând utilizarea CPU pe un workload de compilare kernel (\texttt{make -j4 bzImage}) cu și fără daemonul Sentinel activ, în mașina virtuală de test. Rezultatele medii pe 5 rulări sunt prezentate în Tabelul~\ref{tab:perf}.
 
 \begin{table}[htbp]
 \begin{center}
@@ -244,7 +244,7 @@ Cu Sentinel (cu scorer ML) & 192.1 & 96.1 \\
 \label{tab:perf}
 \end{table}
 
-\par Suprasarcina introdusă de daemonul eBPF fără scorer ML este de $\approx 1.2\%$ din durata totală, sub pragul nefuncțional RN1 de 2\%. Scorerul ML adaugă $\approx 2.7$ secunde suplimentare, dar acesta operează asincron și nu blochează procesarea principală; impactul reflectă consumul de CPU al inferenței Python pe thread-uri separate.
+\par Ppenalizarea de performanță introdusă de daemonul eBPF fără scorer ML este de $\approx 1.2\%$ din durata totală, sub pragul nefuncțional RN1 de 2\%. Scorerul ML adaugă $\approx 2.7$ secunde suplimentare, dar acesta operează asincron și nu blochează procesarea principală; impactul reflectă consumul de CPU al inferenței Python pe thread-uri separate.
 
 \par Latența de carantinare (de la inserarea evenimentului în baza de date la aplicarea acțiunii) a fost măsurată prin câmpul \texttt{latency\_ms} din \texttt{quarantine\_log}. Pe cele 11 scenarii din setul de bază care produc stări $\geq$ THROTTLE, latența medie înregistrată a fost de $1.8$ ms pentru THROTTLE, $3.1$ ms pentru ISOLATE (include apelurile nftables) și $0.9$ ms pentru FREEZE (SIGSTOP este imediat, cgroup.freeze este asincron). Toate valorile se încadrează în cerința RN2 ($< 5$ ms).
 

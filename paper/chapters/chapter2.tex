@@ -1,7 +1,7 @@
-\chapter{Fundamente Teoretice și Stadiul Artei}
+\chapter{Fundamente teoretice și contextul actual}
 \label{chap:ch2}
 
-\par Capitolul de față oferă bazele teoretice necesare înțelegerii arhitecturii sistemului Sentinel. Sunt prezentate mecanismele de securitate ale nucleului Linux, tehnologia eBPF, taxonomia sistemelor de detectare a intruziunilor, principiile algoritmului Isolation Forest și o analiză comparativă a instrumentelor existente în domeniu.
+\par Capitolul de față oferă bazele teoretice necesare înțelegerii arhitecturii sistemului Sentinel. Sunt prezentate mecanismele de securitate ale nucleului Linux, tehnologia eBPF, clasificarea sistemelor de detectare a intruziunilor, principiile algoritmului Isolation Forest și o analiză comparativă a instrumentelor existente în domeniu.
 
 
 \section{Modelul de securitate Linux}
@@ -10,7 +10,7 @@
 \subsection{Apeluri de sistem și frontiera kernel-utilizator}
 \label{subsec:syscalls}
 
-\par Frontiera fundamentală între codul cu privilegii reduse (spațiul utilizator) și codul privilegiat (kernel) în Linux este interfața apelurilor de sistem (syscall). Fiecare operație care implică acces la resurse hardware — creare de socket, execuție de proces, manipulare de fișiere, modificare de capabilități — traversează această interfață printr-o tranziție controlată \cite{Kerrisk2010}. Din perspectiva securității, monitorizarea apelurilor de sistem oferă o vizibilitate completă și ne-eludabilă asupra comportamentului unui proces: un proces care instalează un modul de kernel va apela \texttt{finit\_module} (syscall 313), cel care încearcă escaladarea de privilegii va apela \texttt{setuid} (syscall 105) sau \texttt{capset} (syscall 126), iar cel care exfiltrează date va genera apeluri \texttt{socket} și \texttt{connect} (syscall-urile 41 și 42) \cite{Love2010}.
+\par Frontiera fundamentală între codul cu privilegii reduse (spațiul utilizator) și codul privilegiat (kernel) în Linux este interfața apelurilor de sistem (syscall). Fiecare operație care implică acces la resurse hardware — creare de socket, execuție de proces, manipulare de fișiere, modificare de capabilități — traversează această interfață printr-o tranziție controlată \cite{Kerrisk2010}. Din perspectiva securității, monitorizarea apelurilor de sistem oferă o vizibilitate completă și care nu poate fi evitată asupra comportamentului unui proces: un proces care instalează un modul de kernel va apela \texttt{finit\_module} (syscall 313), cel care încearcă escaladarea de privilegii va apela \texttt{setuid} (syscall 105) sau \texttt{capset} (syscall 126), iar cel care exfiltrează date va genera apeluri \texttt{socket} și \texttt{connect} (syscall-urile 41 și 42) \cite{Love2010}.
 
 \par Kernel-ul Linux x86\_64 definește la momentul scrierii acestei lucrări peste 300 de apeluri de sistem, dar numai o fracție dintre acestea prezintă relevanță din perspectiva securității. Sistemul Sentinel monitorizează 21 de apeluri de sistem selectate pe baza frecvenței de apariție în malware-ul Linux documentat empiric \cite{Cozzi2018}, acoperind categoriile: execuție de procese, modificare de privilegii, operații de memorie, activitate de rețea, operații pe fișiere sensibile și management de module de kernel. Tabelul~\ref{tab:syscalls_risk} prezintă o selecție cu greutățile de risc corespunzătoare.
 
@@ -18,7 +18,7 @@
 \begin{center}
 \begin{tabular}{|p{80pt}|p{40pt}|p{90pt}|p{60pt}|}
 \hline
-\textbf{Syscall} & \textbf{Nr.} & \textbf{Categorie alertă} & \textbf{Greutate} \\
+\textbf{Syscall} & \textbf{Nr.} & \textbf{Categorie alertă} & \textbf{Pondere} \\
 \hline\hline
 \texttt{finit\_module} & 313 & HiddenPID & 95 \\
 \hline
@@ -54,9 +54,9 @@
 \subsection{Linux Security Modules}
 \label{subsec:lsm}
 
-\par Cadrul Linux Security Modules (LSM), descris în detaliu de Wright et al. \cite{Wright2002}, definește o serie de cârlige (hooks) inserate în punctele de decizie critice ale kernel-ului și permite modulelor de securitate — SELinux, AppArmor, SMACK — să impună politici de control al accesului obligatoriu (MAC). LSM operează prin politici declarative statice și nu implementează analiză comportamentală a secvențelor de apeluri de sistem; acesta este motivul pentru care un sistem de detectare bazat pe comportament dinamic rămâne complementar față de mecanismele LSM existente.
+\par Cadrul Linux Security Modules (LSM), descris în detaliu de Wright et al. \cite{Wright2002}, definește o serie de puncte de interceptare (hooks) inserate în punctele de decizie critice ale kernel-ului și permite modulelor de securitate — SELinux, AppArmor, SMACK — să impună politici de control al accesului obligatoriu (MAC). LSM operează prin politici declarative statice și nu implementează analiză comportamentală a secvențelor de apeluri de sistem; acesta este motivul pentru care un sistem de detectare bazat pe comportament dinamic rămâne complementar față de mecanismele LSM existente.
 
-\par Un aspect important pentru proiectarea Sentinel este că eBPF poate fi atașat la cârligele LSM printr-un tip special de program BPF (\texttt{BPF\_PROG\_TYPE\_LSM}), introdus în kernel 5.7. Sentinelul utilizează totuși kprobes, care oferă o acoperire mai largă și o portabilitate mai bună pe versiunile de kernel $\geq 5.4$.
+\par Un aspect important pentru proiectarea Sentinel este că eBPF poate fi atașat la punctele de interceptare (hook) LSM printr-un tip special de program BPF (\texttt{BPF\_PROG\_TYPE\_LSM}), introdus în kernel 5.7. Sentinelul utilizează totuși kprobes, care oferă o acoperire mai largă și o portabilitate mai bună pe versiunile de kernel $\geq 5.4$.
 
 
 \subsection{Namespaces și grupuri de control (cgroups)}
@@ -97,9 +97,9 @@
 \subsection{Kprobes: instrumentarea dinamică a kernel-ului}
 \label{subsec:kprobes}
 
-\par Kprobes sunt un mecanism de instrumentare dinamică a kernel-ului Linux care permite atașarea de handlere la aproape orice instrucțiune din codul kernel-ului fără a-l recompila \cite{Corbet2005}. La activarea unei sonde kprobe, instrucțiunea țintă este înlocuită cu un breakpoint (INT3 pe x86), iar la declanșarea acestuia controlul este transferat handler-ului eBPF înainte de execuția instrucțiunii originale. Latența introdusă este de ordinul a 100--300 ns per apel \cite{Vieira2020}, neglijabilă în raport cu durata unui syscall tipic (microunde--milisecunde).
+\par Kprobes sunt un mecanism de instrumentare dinamică a kernel-ului Linux care permite atașarea de handlere la aproape orice instrucțiune din codul kernel-ului fără a-l recompila \cite{Corbet2005}. La activarea unei sonde kprobe, instrucțiunea țintă este înlocuită cu un breakpoint (INT3 pe x86), iar la declanșarea acestuia controlul este transferat handler-ului eBPF înainte de execuția instrucțiunii originale. Latența introdusă este de ordinul a 100--300 ns per apel \cite{Vieira2020}, neglijabilă în raport cu durata unui syscall tipic (microsecunde--milisecunde).
 
-\par Sentinelul atașează kprobe-uri pe funcțiile \texttt{\_\_x64\_sys\_\{name\}} corespunzătoare celor 21 de syscall-uri monitorizate. Atașarea este dinamică: la pornire, daemonul iterează over toate programele din colecția eBPF cu prefix \texttt{kp\_} și le atașează la funcțiile kernel corespunzătoare, fără a fi necesară enumerarea lor explicită în codul Go.
+\par Sentinelul atașează kprobe-uri pe funcțiile \texttt{\_\_x64\_sys\_\{name\}} corespunzătoare celor 21 de syscall-uri monitorizate. Atașarea este dinamică: la pornire, daemonul iterează peste toate programele din colecția eBPF cu prefix \texttt{kp\_} și le atașează la funcțiile kernel corespunzătoare, fără a fi necesară enumerarea lor explicită în codul Go.
 
 
 \section{Sisteme de detectare a intruziunilor}
