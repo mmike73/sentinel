@@ -39,24 +39,24 @@
 \contentsline {chapter}{\numberline {4}Implementare și Testare}{21}{chapter.4}%
 \contentsline {section}{\numberline {4.1}Mediul de dezvoltare și testare}{21}{section.4.1}%
 \contentsline {section}{\numberline {4.2}Implementarea programului eBPF}{22}{section.4.2}%
-\contentsline {section}{\numberline {4.3}Implementarea daemonului Go}{22}{section.4.3}%
-\contentsline {section}{\numberline {4.4}Implementarea scorerului ML}{23}{section.4.4}%
-\contentsline {section}{\numberline {4.5}Implementarea managerului de carantinare}{24}{section.4.5}%
-\contentsline {section}{\numberline {4.6}Suita de teste de atac}{25}{section.4.6}%
-\contentsline {subsection}{\numberline {4.6.1}Metodologia de testare}{25}{subsection.4.6.1}%
-\contentsline {subsection}{\numberline {4.6.2}Scenariile de bază (REP-01 -- REP-12)}{26}{subsection.4.6.2}%
-\contentsline {subsection}{\numberline {4.6.3}Scenariile avansate (REP-13 -- REP-21)}{27}{subsection.4.6.3}%
-\contentsline {section}{\numberline {4.7}Clasificarea și descrierea teoretică a suitei de atacuri}{28}{section.4.7}%
-\contentsline {subsection}{\numberline {4.7.1}Rootkit-uri și persistență la nivel de nucleu (Module LKM)}{28}{subsection.4.7.1}%
-\contentsline {subsection}{\numberline {4.7.2}Injectarea de procese și manipularea memoriei}{30}{subsection.4.7.2}%
-\contentsline {subsection}{\numberline {4.7.3}Evaziunea defensivă: execuție \textit {fileless} și memorie RWX}{32}{subsection.4.7.3}%
-\contentsline {subsection}{\numberline {4.7.4}Anomalii de rețea, exfiltrare și C2}{33}{subsection.4.7.4}%
-\contentsline {subsection}{\numberline {4.7.5}Escaladarea privilegiilor și evadarea din medii izolate}{34}{subsection.4.7.5}%
-\contentsline {subsection}{\numberline {4.7.6}Manipularea fișierelor, persistență și recoltare}{35}{subsection.4.7.6}%
-\contentsline {subsection}{\numberline {4.7.7}Anomalii de execuție și epuizarea resurselor}{36}{subsection.4.7.7}%
-\contentsline {section}{\numberline {4.8}Considerente de performanță}{37}{section.4.8}%
-\contentsline {chapter}{\numberline {5}Concluzii}{38}{chapter.5}%
-\contentsline {section}{Contribuții originale}{39}{section*.2}%
-\contentsline {section}{Limitări}{39}{section*.3}%
-\contentsline {section}{Direcții de cercetare viitoare}{40}{section*.4}%
-\contentsline {chapter}{\bbl@ensure@romanian {Bibliografie}}{42}{chapter*.5}%
+\contentsline {section}{\numberline {4.3}Implementarea daemonului Go}{24}{section.4.3}%
+\contentsline {section}{\numberline {4.4}Implementarea scorerului ML}{27}{section.4.4}%
+\contentsline {section}{\numberline {4.5}Implementarea managerului de carantinare}{29}{section.4.5}%
+\contentsline {section}{\numberline {4.6}Suita de teste de atac}{32}{section.4.6}%
+\contentsline {subsection}{\numberline {4.6.1}Metodologia de testare}{32}{subsection.4.6.1}%
+\contentsline {subsection}{\numberline {4.6.2}Scenariile de bază (REP-01 -- REP-12)}{33}{subsection.4.6.2}%
+\contentsline {subsection}{\numberline {4.6.3}Scenariile avansate (REP-13 -- REP-21)}{34}{subsection.4.6.3}%
+\contentsline {section}{\numberline {4.7}Clasificarea și descrierea teoretică a suitei de atacuri}{35}{section.4.7}%
+\contentsline {subsection}{\numberline {4.7.1}Rootkit-uri și persistență la nivel de nucleu (Module LKM)}{35}{subsection.4.7.1}%
+\contentsline {subsection}{\numberline {4.7.2}Injectarea de procese și manipularea memoriei}{36}{subsection.4.7.2}%
+\contentsline {subsection}{\numberline {4.7.3}Evaziunea defensivă: execuție \textit {fileless} și memorie RWX}{38}{subsection.4.7.3}%
+\contentsline {subsection}{\numberline {4.7.4}Anomalii de rețea, exfiltrare și C2}{39}{subsection.4.7.4}%
+\contentsline {subsection}{\numberline {4.7.5}Escaladarea privilegiilor și evadarea din medii izolate}{40}{subsection.4.7.5}%
+\contentsline {subsection}{\numberline {4.7.6}Manipularea fișierelor, persistență și recoltare}{41}{subsection.4.7.6}%
+\contentsline {subsection}{\numberline {4.7.7}Anomalii de execuție și epuizarea resurselor}{43}{subsection.4.7.7}%
+\contentsline {section}{\numberline {4.8}Considerente de performanță}{43}{section.4.8}%
+\contentsline {chapter}{\numberline {5}Concluzii}{45}{chapter.5}%
+\contentsline {section}{Contribuții originale}{46}{section*.2}%
+\contentsline {section}{Limitări}{46}{section*.3}%
+\contentsline {section}{Direcții de cercetare viitoare}{47}{section*.4}%
+\contentsline {chapter}{\bbl@ensure@romanian {Bibliografie}}{49}{chapter*.5}%

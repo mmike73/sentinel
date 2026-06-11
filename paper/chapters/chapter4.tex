@@ -31,6 +31,29 @@ clang -target bpf -O2 -g -D__TARGET_ARCH_x86 \
   -c tracer.bpf.c -o tracer.bpf.o
 \end{verbatim}
 
+\par Contractul de date dintre spațiul kernel și cel utilizator este definit de structura \texttt{event}, transmisă prin ring buffer. Dimensiunile fixe (\texttt{comm[16]}, \texttt{fname[128]}) sunt impuse de verificatorul eBPF, care respinge orice alocare dinamică în heap-ul kernel:
+
+\begin{lstlisting}[style=cstyle,caption={Structura evenimentului și hărțile eBPF din \texttt{tracer.bpf.c}}]
+struct event {
+    __u64 ts_ns;       /* bpf_ktime_get_ns() */
+    __u32 pid;
+    __u32 uid;
+    __u32 syscall_nr;
+    char  comm[16];
+    char  fname[128];
+};
+
+/* Ring buffer de 64 MiB: zero-copy, lockless, per-CPU ordering */
+struct { __uint(type, BPF_MAP_TYPE_RINGBUF);
+         __uint(max_entries, 64 * 1024 * 1024); } events SEC(".maps");
+
+/* Contor de evenimente pierdute (per-CPU, fara lock) */
+struct { __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+         __uint(max_entries, 1);
+         __type(key, __u32); __type(value, __u64);
+} drop_count SEC(".maps");
+\end{lstlisting}
+
 \par Flag-ul \texttt{-O2} este esențial din două motive: verificatorul eBPF impune o limită de 1 milion de instrucțiuni per execuție și respinge programele cu structuri de control prea complexe; în plus, backend-ul LLVM pentru arhitectura BPF necesită un arbore de sintaxă optimizat pentru a emite \textit{opcodes} BPF valide --- codul neoptimizat (\texttt{-O0}) generează frecvent accesări de memorie pe care Verificatorul le respinge ca nesigure.
 
 \par O decizie de implementare importantă privește extragerea sigură a căilor absolute ale fișierelor. Handler-ul \texttt{submit\_event\_with\_path} utilizează secvența:
@@ -42,6 +65,33 @@ bpf_probe_read_kernel(&fname_uptr, sizeof(fname_uptr), &inner->rsi);
 bpf_probe_read_user_str(e->fname, sizeof(e->fname),
                         (const char *)fname_uptr);
 \end{verbatim}
+
+\par Funcția \texttt{submit\_event} encapsulează întregul protocol de emitere: verificarea blacklist-ului, rezervarea zero-copy a unui slot în ring buffer și tratamentul atomic al eșecului de rezervare:
+
+\begin{lstlisting}[style=cstyle,caption={Funcția \texttt{submit\_event}: rezervare ring buffer și contorizare drop-uri}]
+static __always_inline int submit_event(__u32 syscall_nr)
+{
+    __u32 pid = bpf_get_current_pid_tgid() >> 32;
+    if (bpf_map_lookup_elem(&pid_blacklist, &pid))
+        return 0;
+
+    struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+    if (!e) {
+        __u32 key = 0;
+        __u64 *cnt = bpf_map_lookup_elem(&drop_count, &key);
+        if (cnt) __sync_fetch_and_add(cnt, 1);
+        return 0;
+    }
+    e->ts_ns      = bpf_ktime_get_ns();
+    e->pid        = pid;
+    e->uid        = bpf_get_current_uid_gid() & 0xFFFFFFFF;
+    e->syscall_nr = syscall_nr;
+    bpf_get_current_comm(&e->comm, sizeof(e->comm));
+    e->fname[0]   = '\0';
+    bpf_ringbuf_submit(e, 0);
+    return 0;
+}
+\end{lstlisting}
 
 \par Kprobe-urile sunt atașate la wrapper-urile \texttt{\_\_x64\_sys\_*} care primesc un singur argument --- un pointer la structura \texttt{pt\_regs} cu argumentele originale ale syscall-ului. Accesul direct la argumentele syscall-ului necesită dereferențierea unui nivel suplimentar de \texttt{pt\_regs} (\textit{inner regs}), o idiomă documentată în \cite{Rice2023} și necesară pentru compatibilitatea cu versiunile kernel $\geq 4.17$ pe x86\_64.
 
@@ -60,6 +110,52 @@ bpf_probe_read_user_str(e->fname, sizeof(e->fname),
     \item Inserează propriul PID în \texttt{pid\_blacklist} pentru a preveni buclele de auto-instrumentare.
 \end{enumerate}
 
+\par Inițializarea reader-ului și deschiderea bazei de date cu instrucțiune pregătită se realizează astfel:
+
+\begin{lstlisting}[style=gostyle,caption={Inițializarea ring buffer reader și a prepared statement SQLite}]
+rb, err := ringbuf.NewReader(coll.Maps["events"])
+if err != nil { log.Fatalf("ringbuf.NewReader: %v", err) }
+defer rb.Close()
+
+db, _ := sql.Open("sqlite3",
+    *dbPath+"?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000")
+
+stmt, _ := db.Prepare(`INSERT INTO events
+    (alert_type, score, state, pid, comm, timestamp, detail)
+    VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`)
+\end{lstlisting}
+
+\par Bucla principală citește din ring buffer în mod blocant, parsează evenimentele prin \texttt{binary.Read} (little-endian, x86\_64) și aplică cele trei straturi de scoring. La fiecare eveniment, scorul static este calculat întâi, apoi suprascris de detectorul de rafale sau de alertele bazate pe cale, dacă acestea se declanșează:
+
+\begin{lstlisting}[style=gostyle,caption={Bucla principală de procesare a evenimentelor din ring buffer}]
+for {
+    record, err := rb.Read()  // blocat pana la urmatorul eveniment
+    if err != nil { break }
+
+    var e bpfEvent
+    binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &e)
+
+    comm  := string(bytes.TrimRight(e.Comm[:],  "\x00"))
+    fname := string(bytes.TrimRight(e.Fname[:], "\x00"))
+
+    score := staticScore(e.SyscallNr, e.Uid)
+    aType := alertType(e.SyscallNr)
+
+    if bScore, bType, ok := bursts.check(e.Pid, e.SyscallNr, 5, 3e9, 10e9); ok {
+        score, aType = bScore, bType
+    } else if pScore, pType, ok := pathAlert(e.SyscallNr, fname); ok {
+        score, aType = pScore, pType
+    }
+
+    state  := scoreToState(score)
+    detail, _ := json.Marshal(map[string]interface{}{
+        "syscall_nr": e.SyscallNr, "comm": comm, "score": score,
+        "state": state, "source": "kprobe",
+    })
+    stmt.Exec(aType, score, state, e.Pid, comm, string(detail))
+}
+\end{lstlisting}
+
 \par Bucla principală citește din ring buffer în mod blocant (\texttt{rb.Read()}), parsează evenimentele prin \texttt{binary.Read} (little-endian, pentru a respecta ordinea octeților x86\_64) și aplică secvențial cele trei straturi de scoring. Operațiunea de inserare în SQLite utilizează o instrucțiune pregătită (\textit{prepared statement}) pentru a elimina overhead-ul de parsare SQL per eveniment.
 
 \par Detectarea rafale (\texttt{burstTracker}) menține o mapă \texttt{windows[key][]int64} cu timestamp-urile apelurilor dintr-o fereastră glisantă. Cheia de burst este:
@@ -70,6 +166,58 @@ bpf_probe_read_user_str(e->fname, sizeof(e->fname),
 \end{equation}
 
 \par Incluzând \texttt{start\_time} (câmpul 22 din \texttt{/proc/\{pid\}/stat}, exprimat în \textit{ticks} de ceas) în cheie, sistemul distinge între procese diferite care rulează cu același PID pe parcursul testelor --- o situație frecventă în suita de atacuri, unde procesele au durată scurtă de viață. Utilizarea exclusivă a ultimilor 16 biți din \texttt{start\_time} introduce o probabilitate de coliziune matematic neglijabilă ($\approx 1/65536$), un compromis excelent între precizia detecției și amprenta de memorie.
+
+\par Funcția \texttt{burstKey} codifică identitatea unui proces în 64 de biți, incluzând \texttt{start\_time} din \texttt{/proc/\{pid\}/stat} pentru a distinge procese reutilizatoare de PID:
+
+\begin{lstlisting}[style=gostyle,caption={Cheia de burst și logica ferestrei glisante}]
+func burstKey(pid, nr uint32) uint64 {
+    st := pidStartTime(pid)  // campul 22 din /proc/{pid}/stat (ticks)
+    return (uint64(pid) << 32) | (uint64(nr) << 16) | (st & 0xFFFF)
+}
+
+func (b *burstTracker) check(pid, nr uint32,
+    threshold int, windowNs, cooldownNs int64) (float64, string, bool) {
+    k   := burstKey(pid, nr)
+    now := time.Now().UnixNano()
+    b.mu.Lock(); defer b.mu.Unlock()
+    // retine doar timestamp-urile din fereastra activa
+    pruned := b.windows[k][:0]
+    for _, t := range b.windows[k] {
+        if t >= now-windowNs { pruned = append(pruned, t) }
+    }
+    b.windows[k] = append(pruned, now)
+    if len(b.windows[k]) < threshold { return 0, "", false }
+    if last, ok := b.lastFire[k]; ok && now-last < cooldownNs {
+        return 0, "", false
+    }
+    b.lastFire[k] = now
+    if nr == 41 || nr == 42 { return 75.0, "NetworkAnomaly", true }
+    if nr == 56              { return 35.0, "SyscallAnomaly",  true }
+    return 0, "", false
+}
+\end{lstlisting}
+
+\par Dacă scorerul ML este activ, scorul static este rafinat asincron prin amestecul ponderat cu scorul Isolation Forest. Ponderea ML este invers proporțională cu certitudinea scorului static --- syscall-urile cu risc ridicat (ex. \texttt{init\_module}, $w=95$) necesită corecție minimă, în timp ce syscall-urile ambigue (ex. \texttt{write}, $w=5$) beneficiază cel mai mult de contextul furnizat de model:
+
+\begin{lstlisting}[style=gostyle,caption={Ponderea ML și fuziunea scorurilor static și Isolation Forest}]
+func scorerWeight(nr uint32) float64 {
+    w := RISK_WEIGHTS[nr]
+    switch {
+    case w >= 85: return 0.1  // init_module, finit_module
+    case w >= 60: return 0.2
+    case w >= 30: return 0.5
+    default:      return 0.7  // write, socket, clone
+    }
+}
+
+// Goroutine asincron --- nu blocheaza bucla principala:
+ifScore := callScorer(*scorerURL, ev, comm)
+w        := scorerWeight(snr)
+blended  := (1-w)*baseScore + w*ifScore
+if floor := baseScore * 0.5; blended < floor { blended = floor }
+db.Exec("UPDATE events SET score=?, state=? WHERE id=?",
+    blended, scoreToState(blended), eventID)
+\end{lstlisting}
 
 \par Un goroutine separat curăță intrările expirate la fiecare 30 de secunde pentru a preveni creșterea nelimitată a memoriei. Altul monitorizează contorul de drop la fiecare 10 secunde.
 
@@ -89,15 +237,78 @@ bpf_probe_read_user_str(e->fname, sizeof(e->fname),
     \item $v_{25}$: $\log_{10}(\text{pid})/6$ --- diferențiază procesele de sistem (PID mic) de procesele spațiului utilizator.
 \end{itemize}
 
+\par Implementarea funcției de extragere a caracteristicilor reflectă direct taxonomia de mai sus:
+
+\begin{lstlisting}[style=pythonstyle,caption={Funcția \texttt{event\_to\_vector}: construirea vectorului de 26 de trăsături}]
+SYSCALL_INDEX = {
+    1:0, 9:1, 10:2, 41:3, 42:4, 49:5, 56:6, 59:7,
+    62:8, 101:9, 105:11, 126:13, 175:14, 313:18, ...
+}
+
+def event_to_vector(event: dict) -> np.ndarray:
+    v  = np.zeros(26, dtype=np.float32)
+    nr = event.get("syscall_nr", 0)
+    idx = SYSCALL_INDEX.get(nr, -1)
+    if idx >= 0:
+        v[idx] = 1.0                           # one-hot syscall (v0..v20)
+    v[21] = 1.0 if event.get("uid", 1) == 0 else 0.0
+    v[22] = RISK_WEIGHTS.get(nr, 5) / 100.0   # cunostinta a priori de risc
+    dt   = datetime.fromisoformat(event.get("timestamp", "").replace("Z", "+00:00"))
+    v[23] = dt.hour / 23.0
+    v[24] = 1.0 if dt.weekday() >= 5 else 0.0
+    v[25] = math.log10(max(event.get("pid", 1), 1)) / 6.0
+    return v
+\end{lstlisting}
+
 \par Modelul Isolation Forest este antrenat pe evenimentele cu scor static $< 30$ din baza de date (care reprezintă comportamentul de bază), cu parametrii $n\_estimators=200$ și $contamination=0.01$. Vectorii sunt standardizați prin \texttt{StandardScaler} \cite{Pedregosa2011} înaintea antrenării, iar scalarea este aplicată identic la inferență, utilizând parametrii din faza de antrenament. Modelul antrenat este persistat prin \texttt{joblib} și poate fi reantrenat cu date actualizate prin \texttt{POST /model/train} fără a opri serviciul.
 
 \par Conversia scorului brut IF (valoarea \texttt{decision\_function}, negativă pentru anomalii, pozitivă pentru puncte normale) în scor de amenințare pe scala 0--100 utilizează transformarea sigmoidă cu coeficientul de creștere 25, care asigură o tranziție rapidă (abruptă) între stările benigne și maligne --- formula~\ref{eq:sigmoid_transform} din Capitolul~\ref{chap:ch2}. Un punct cu \texttt{raw\_score} $= -0.1$ (ușor anormal) obține \texttt{threat\_score} $\approx 92$, în timp ce un punct cu \texttt{raw\_score} $= 0.1$ (ușor normal) obține \texttt{threat\_score} $\approx 8$.
+
+\par Întregul pipeline de inferență este expus prin endpoint-ul \texttt{POST /score}. Modelul este încărcat \textit{lazy} la primul apel, aplicând același \texttt{StandardScaler} din faza de antrenament:
+
+\begin{lstlisting}[style=pythonstyle,caption={Transformarea sigmoidă și endpoint-ul \texttt{/score}}]
+def raw_to_threat_score(raw: float) -> float:
+    prob = 1.0 / (1.0 + math.exp(-25.0 * (-raw)))
+    return round(min(max(prob * 100.0, 0.0), 100.0), 2)
+
+@app.post("/score")
+def score(event: EventRequest):
+    b      = get_bundle()                           # incarcare lazy
+    vec    = event_to_vector(event.model_dump()).reshape(1, -1)
+    scaled = b.scaler.transform(vec)                # acelasi scaler din train
+    raw    = b.model.decision_function(scaled)[0]
+    threat = raw_to_threat_score(raw)
+    return {
+        "threat_score": threat,
+        "state":        score_to_state(threat),
+        "if_raw":       round(raw, 6),
+    }
+\end{lstlisting}
 
 
 \section{Implementarea managerului de carantinare}
 \label{sec:quarantine_impl}
 
 \par Managerul de carantinare (\texttt{quarantine/main.go}, 306 de linii) validează la pornire disponibilitatea cgroup v2 prin verificarea magic number-ului sistemului de fișiere \texttt{/sys/fs/cgroup} (\texttt{0x63677270} = ``cgrp'' în ASCII) și prezența controllerelor \texttt{cpu} și \texttt{memory} în \texttt{/sys/fs/cgroup/cgroup.controllers}. Această verificare este esențială: pe sisteme cu cgroup v1 sau cgroup v2 fără controllerele activate, acțiunile de carantinare ar eșua silențios.
+
+\begin{lstlisting}[style=gostyle,caption={Validarea cgroup v2 la pornirea managerului de carantinare}]
+func validateCgroupV2() {
+    const cgroup2Magic = 0x63677270  // "cgrp" ASCII
+    var st syscall.Statfs_t
+    if err := syscall.Statfs("/sys/fs/cgroup", &st); err != nil {
+        log.Fatalf("FATAL: cannot stat /sys/fs/cgroup: %v", err)
+    }
+    if st.Type != cgroup2Magic {
+        log.Fatalf("FATAL: cgroup v2 not found (magic=0x%x)", st.Type)
+    }
+    data, _ := os.ReadFile("/sys/fs/cgroup/cgroup.controllers")
+    for _, ctrl := range []string{"cpu", "memory"} {
+        if !strings.Contains(string(data), ctrl) {
+            log.Fatalf("FATAL: cgroup v2 controller %q not available", ctrl)
+        }
+    }
+}
+\end{lstlisting}
 
 \par Acțiunile de izolare sunt implementate pe trei niveluri de asprime:
 
@@ -107,7 +318,47 @@ bpf_probe_read_user_str(e->fname, sizeof(e->fname),
     \item \textbf{FREEZE}: Trimite \texttt{SIGSTOP} procesului (oprire imediată, indiferent de starea actuală), creează cgroup-ul și scrie \texttt{"1"} în \texttt{cgroup.freeze}. Combinația SIGSTOP + \texttt{cgroup.freeze} este critică: chiar dacă un atacator extern ar încerca să reia procesul printr-un semnal \texttt{SIGCONT}, limitarea impusă la nivel de kernel de cgroup previne planificarea (\textit{scheduling}) procesului de către procesor.
 \end{itemize}
 
+\par Implementarea concretă a celor două acțiuni extreme ilustrează strategia de containment în profunzime:
+
+\begin{lstlisting}[style=gostyle,caption={Implementarea acțiunilor THROTTLE și FREEZE}]
+func createCgroupThrottle(pid int, quota, period string) (string, error) {
+    path, _ := createCgroupBase(pid)
+    // 10000/100000 = 10% CPU; procesul ruleaza dar nu poate satura CPU-ul
+    os.WriteFile(filepath.Join(path, "cpu.max"),
+        []byte(quota+" "+period), 0644)
+    return path, nil
+}
+
+func freezeProcess(pid int, cgPath string) error {
+    // SIGSTOP: oprire imediata, inaintea scrieri in cgroup
+    syscall.Kill(pid, syscall.SIGSTOP)
+    // cgroup.freeze: previne planificarea chiar daca SIGCONT este trimis extern
+    os.WriteFile(filepath.Join(cgPath, "cgroup.freeze"), []byte("1"), 0644)
+    return nil
+}
+\end{lstlisting}
+
 \par Izolarea de rețea pentru starea ISOLATE utilizează inodul cgroup-ului ca identificator de filtrare în nftables. Inodul se obține prin \texttt{syscall.Stat} pe calea cgroup-ului; nftables suportă filtrarea \texttt{meta cgroup} prin inod în kernel $\geq 5.10$. Această abordare este net superioară izolării prin \textit{network namespaces}, deoarece poate fi aplicată ``la cald'', fără a necesita repornirea sau cooperarea procesului malițios.
+
+\par Implementarea filtrării de rețea prin inod cgroup este net superioară abordărilor bazate pe PID sau IP, deoarece inodul este stabil pe durata vieții cgroup-ului și nu poate fi falsificat de procesul izolat:
+
+\begin{lstlisting}[style=gostyle,caption={Izolarea de rețea via inod cgroup și nftables (\texttt{meta cgroup})}]
+func isolateNetwork(pid int) error {
+    cgPath := fmt.Sprintf("/sys/fs/cgroup/sentinel/quarantine_%d", pid)
+    var st syscall.Stat_t
+    syscall.Stat(cgPath, &st)
+    cgID := fmt.Sprintf("%d", st.Ino)  // inodul cgroup = selector nftables
+
+    exec.Command("nft", "add", "table", "inet", "sentinel_quarantine").Run()
+    exec.Command("nft", "add", "chain", "inet", "sentinel_quarantine", "output",
+        "{ type filter hook output priority 0; policy accept; }").Run()
+    exec.Command("nft", "add", "rule", "inet", "sentinel_quarantine",
+        "output", "meta", "cgroup", cgID, "drop").Run()
+    exec.Command("nft", "add", "rule", "inet", "sentinel_quarantine",
+        "input", "meta", "cgroup", cgID, "drop").Run()
+    return nil
+}
+\end{lstlisting}
 
 \par Auto-dezghețarea pentru starea FREEZE este gestionată de un goroutine \texttt{unfreezeWatcher} care verifică la fiecare 5 secunde procesele cu deadline expirat. Dezghețarea constă în scrierea \texttt{"0"} în \texttt{cgroup.freeze}, trimiterea \texttt{SIGCONT} și eliminarea procesului din cgroup. Intervalul implicit de 5 minute este configurabil la pornire prin flag-ul \texttt{--unfreeze-after}.
 
