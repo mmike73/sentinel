@@ -1,7 +1,7 @@
 \chapter{Fundamente teoretice și contextul actual}
 \label{chap:ch2}
 
-\par Capitolul de față oferă bazele teoretice necesare înțelegerii arhitecturii sistemului Sentinel. Sunt prezentate mecanismele de securitate ale nucleului Linux, tehnologia eBPF, clasificarea sistemelor de detectare a intruziunilor, principiile algoritmului Isolation Forest și o analiză comparativă a instrumentelor existente în domeniu.
+\par Prezentul capitol stabilește fundamentul teoretic necesar înțelegerii și proiectării arhitecturii sistemului Sentinel. Sunt analizate mecanismele intrinseci de securitate ale nucleului Linux, inovațiile aduse de tehnologia eBPF, taxonomia sistemelor de detectare a intruziunilor, aparatul matematic al algoritmului Isolation Forest, precum și o analiză comparativă a soluțiilor consacrate în domeniu.
 
 
 \section{Modelul de securitate Linux}
@@ -10,9 +10,11 @@
 \subsection{Apeluri de sistem și frontiera kernel-utilizator}
 \label{subsec:syscalls}
 
-\par Frontiera fundamentală între codul cu privilegii reduse (spațiul utilizator) și codul privilegiat (kernel) în Linux este interfața apelurilor de sistem (syscall). Fiecare operație care implică acces la resurse hardware — creare de socket, execuție de proces, manipulare de fișiere, modificare de capabilități — traversează această interfață printr-o tranziție controlată \cite{Kerrisk2010}. Din perspectiva securității, monitorizarea apelurilor de sistem oferă o vizibilitate completă și care nu poate fi evitată asupra comportamentului unui proces: un proces care instalează un modul de kernel va apela \texttt{finit\_module} (syscall 313), cel care încearcă escaladarea de privilegii va apela \texttt{setuid} (syscall 105) sau \texttt{capset} (syscall 126), iar cel care exfiltrează date va genera apeluri \texttt{socket} și \texttt{connect} (syscall-urile 41 și 42) \cite{Love2010}.
+\par Granița fundamentală de izolare între codul cu privilegii reduse (spațiul utilizator / user-space) și codul cu privilegii absolute (nucleul / kernel-space) în sistemele Linux este definită de interfața apelurilor de sistem (syscalls). Orice acțiune care necesită interacțiunea cu resursele hardware sau logice ale sistemului --- instanțierea de conexiuni (\texttt{socket}), crearea de procese, manipularea sistemului de fișiere, alterarea privilegiilor --- trebuie să traverseze această interfață printr-o tranziție de context strict controlată \cite{Kerrisk2010}.
 
-\par Kernel-ul Linux x86\_64 definește la momentul scrierii acestei lucrări peste 300 de apeluri de sistem, dar numai o fracție dintre acestea prezintă relevanță din perspectiva securității. Sistemul Sentinel monitorizează 21 de apeluri de sistem selectate pe baza frecvenței de apariție în malware-ul Linux documentat empiric \cite{Cozzi2018}, acoperind categoriile: execuție de procese, modificare de privilegii, operații de memorie, activitate de rețea, operații pe fișiere sensibile și management de module de kernel. Tabelul~\ref{tab:syscalls_risk} prezintă o selecție cu greutățile de risc corespunzătoare.
+\par Din perspectiva securității cibernetice, monitorizarea apelurilor de sistem oferă o vizibilitate exhaustivă și imposibil de eludat asupra comportamentului real al unui proces: o rutină malițioasă care încearcă să încarce un modul de kernel va invoca inevitabil \texttt{finit\_module} (syscall 313), o tentativă de escaladare a privilegiilor va apela \texttt{setuid} (syscall 105) sau \texttt{capset} (syscall 126), în timp ce exfiltrarea datelor va fi tradusă prin generarea de apeluri \texttt{socket} și \texttt{connect} (syscall-urile 41, respectiv 42) \cite{Love2010}.
+
+\par Kernel-ul Linux x86\_64 expune peste 300 de apeluri de sistem, dar numai un subansamblu specific prezintă interes direct din perspectiva securității. Sistemul Sentinel monitorizează 21 de apeluri de sistem, selectate pe baza incidenței lor empirice în anatomia malware-ului pentru Linux \cite{Cozzi2018}, acoperind categoriile: execuție de procese, modificare de privilegii, operații de memorie, activitate de rețea, operații pe fișiere sensibile și management de module de kernel. Tabelul~\ref{tab:syscalls_risk} prezintă o selecție cu greutățile de risc corespunzătoare.
 
 \begin{table}[htbp]
 \begin{center}
@@ -20,13 +22,13 @@
 \hline
 \textbf{Syscall} & \textbf{Nr.} & \textbf{Categorie alertă} & \textbf{Pondere} \\
 \hline\hline
-\texttt{finit\_module} & 313 & HiddenPID & 95 \\
+\texttt{finit\_module} & 313 & HiddenPID           & 95 \\
 \hline
-\texttt{init\_module}  & 175 & HiddenPID & 95 \\
+\texttt{init\_module}  & 175 & HiddenPID           & 95 \\
 \hline
-\texttt{delete\_module}& 176 & HiddenPID & 85 \\
+\texttt{delete\_module}& 176 & HiddenPID           & 85 \\
 \hline
-\texttt{ptrace}        & 101 & ProcessInjection & 75 \\
+\texttt{ptrace}        & 101 & ProcessInjection    & 75 \\
 \hline
 \texttt{setuid}        & 105 & PrivilegeEscalation & 70 \\
 \hline
@@ -34,15 +36,15 @@
 \hline
 \texttt{capset}        & 126 & PrivilegeEscalation & 70 \\
 \hline
-\texttt{execve}        & 59  & ParentChildAnomaly & 50 \\
+\texttt{execve}        & 59  & ParentChildAnomaly  & 50 \\
 \hline
-\texttt{mprotect}      & 10  & MemoryInjection & 45 \\
+\texttt{mprotect}      & 10  & MemoryInjection     & 45 \\
 \hline
-\texttt{mmap}          & 9   & MemoryInjection & 40 \\
+\texttt{mmap}          & 9   & MemoryInjection     & 40 \\
 \hline
-\texttt{connect}       & 42  & NetworkAnomaly & 15 \\
+\texttt{connect}       & 42  & NetworkAnomaly      & 15 \\
 \hline
-\texttt{socket}        & 41  & NetworkAnomaly & 10 \\
+\texttt{socket}        & 41  & NetworkAnomaly      & 10 \\
 \hline
 \end{tabular}
 \end{center}
@@ -54,17 +56,17 @@
 \subsection{Linux Security Modules}
 \label{subsec:lsm}
 
-\par Cadrul Linux Security Modules (LSM), descris în detaliu de Wright et al. \cite{Wright2002}, definește o serie de puncte de interceptare (hooks) inserate în punctele de decizie critice ale kernel-ului și permite modulelor de securitate — SELinux, AppArmor, SMACK — să impună politici de control al accesului obligatoriu (MAC). LSM operează prin politici declarative statice și nu implementează analiză comportamentală a secvențelor de apeluri de sistem; acesta este motivul pentru care un sistem de detectare bazat pe comportament dinamic rămâne complementar față de mecanismele LSM existente.
+\par Cadrul Linux Security Modules (LSM), teoretizat și implementat de Wright et al. \cite{Wright2002}, pune la dispoziție o arhitectură bazată pe cârlige de interceptare (hooks) plasate strategic în punctele decizionale ale nucleului. Această infrastructură permite modulelor de securitate (ex. SELinux, AppArmor) să impună politici stricte de tip Mandatory Access Control (MAC).
 
-\par Un aspect important pentru proiectarea Sentinel este că eBPF poate fi atașat la punctele de interceptare (hook) LSM printr-un tip special de program BPF (\texttt{BPF\_PROG\_TYPE\_LSM}), introdus în kernel 5.7. Sentinelul utilizează totuși kprobes, care oferă o acoperire mai largă și o portabilitate mai bună pe versiunile de kernel $\geq 5.4$.
+\par O limitare inerentă a modulelor LSM tradiționale este natura lor declarativă și statică, nefiind concepute pentru analiza comportamentală dinamică a secvențelor de execuție. Din acest motiv, un sistem de detectare a anomaliilor comportamentale, precum Sentinel, reprezintă o completare necesară și ortogonală față de mecanismele LSM. Deși eBPF permite atașarea programelor la punctele de interceptare LSM (prin \texttt{BPF\_PROG\_TYPE\_LSM}, funcționalitate introdusă în Linux 5.7), Sentinel utilizează tehnologia kprobes pentru a asigura o compatibilitate retroactivă mai largă pe nucleele $\geq 5.4$.
 
 
 \subsection{Namespaces și grupuri de control (cgroups)}
 \label{subsec:cgroups}
 
-\par Namespaces Linux (PID, net, mount, user, UTS, IPC) partajează starea globală a kernel-ului în contexte izolate pentru grupuri de procese, furnizând mecanismul de bază pentru containerizare \cite{Kerrisk2010}. Control Groups v2 (cgroup v2), propuse inițial de Menage \cite{Menage2007} și standardizate complet în kernel 4.5, permit limitarea și contorizarea utilizării resurselor — CPU, memorie, I/O de bloc — la nivelul unui grup ierarhic de procese.
+\par Paradigmele Namespaces (PID, net, mount, user, UTS, IPC) asigură izolarea stării globale a kernel-ului în contexte virtualizate pentru grupuri distincte de procese, reprezentând fundamentul tehnologiilor moderne de containerizare \cite{Kerrisk2010}. În paralel, mecanismul Control Groups v2 (cgroup v2), fundamentat inițial de Menage \cite{Menage2007} și standardizat în nucleul 4.5, gestionează alocarea, limitarea și monitorizarea resurselor fizice (CPU, memorie, I/O bloc) pentru ierarhii de procese.
 
-\par Cgroup v2 aduce față de predecesorul său (cgroup v1) o ierarhie unificată și un model de delegare mai coerent, elimnând ambiguitățile de configurare care apăreau când un proces era plasat simultan în cgroup-uri din mai multe ierarhii. Sentinelul impune la pornire prezența controllerelor \texttt{cpu} și \texttt{memory} în \texttt{/sys/fs/cgroup/cgroup.controllers}, condiție satisfăcută implicit pe Debian 12 și Ubuntu 22.04+.
+\par Spre deosebire de iterația anterioară (cgroup v1), arhitectura v2 propune o ierarhie unificată și un model de delegare mai coerent, eliminând ambiguitățile de configurare care apăreau la apartenența simultană a unui proces la sub-arbori de control diferiți. Arhitectura de izolare a sistemului Sentinel impune la pornire prezența controllerelor \texttt{cpu} și \texttt{memory} în \texttt{/sys/fs/cgroup/cgroup.controllers}, condiție satisfăcută nativ pe distribuțiile Debian 12 și Ubuntu 22.04+.
 
 
 \section{Extended Berkeley Packet Filter (eBPF)}
@@ -73,9 +75,9 @@
 \subsection{Evoluție de la BPF clasic la eBPF}
 \label{subsec:ebpf_history}
 
-\par Berkeley Packet Filter (BPF) a fost introdus de McCanne și Jacobson în 1993 ca arhitectură eficientă pentru captura de pachete în spațiul utilizator, cu o mașină virtuală simplă de 32 de biți și un set limitat de instrucțiuni \cite{McCanne1993}. Importanța conceptuală a BPF constă în mutarea filtrului în kernel — pachetele sunt evaluate înainte de copierea în spațiul utilizator, eliminând transferul de date inutile prin granița privilegiată.
+\par Berkeley Packet Filter (BPF) a fost conceptualizat de McCanne și Jacobson în 1993, vizând dezvoltarea unei arhitecturi extrem de eficiente pentru capturarea și filtrarea traficului de rețea, operând printr-o mașină virtuală minimalistă pe 32 de biți \cite{McCanne1993}. Schimbarea de paradigmă pe care a propus-o BPF a fost executarea logicii de filtrare direct în kernel, evaluând pachetele la sursă pentru a preveni transferul inutil de date peste frontiera privilegiată.
 
-\par Linux 3.18 (2014) a extins radical această arhitectură sub denumirea eBPF: registre de 64 de biți, un set de instrucțiuni mai bogat, structuri de date persistente (maps), un verificator formal al programelor și capacitatea de atașare la puncte de instrumentare din întreg kernel-ul \cite{Rice2023}. Verificatorul eBPF garantează că orice program încarcat va termina (absența ciclurilor infinite) și nu va accesa memorie în afara granițelor definite — proprietăți esențiale pentru siguranța unui sistem de producție. Compilarea JIT transformă bytecode-ul verificat în instrucțiuni native x86\_64, eliminând overhead-ul de interpretare.
+\par Începând cu Linux 3.18 (2014), această arhitectură a suferit o extensie masivă sub acronimul eBPF: lărgirea registrelor la 64 de biți, îmbogățirea setului de instrucțiuni, introducerea structurilor de date partajate (maps) și capacitatea de atașare asincronă la aproape orice funcție a sistemului de operare \cite{Rice2023}. O inovație critică o reprezintă Verificatorul Formal (The Verifier), un mecanism care analizează codul înainte de execuție pentru a garanta finalizarea acestuia (lipsa buclelor infinite) și respectarea strictă a limitelor de memorie accesată. Compilatorul JIT (Just-In-Time) convertește ulterior bytecode-ul validat în cod mașină nativ, reducând la minimum costul de performanță (overhead).
 
 \par Ecosistemul eBPF a evoluat rapid: bibliotecile \texttt{libbpf} și \texttt{cilium/ebpf} \cite{CiliumEBPF} oferă o interfață Go/C de nivel înalt pentru încărcarea și gestionarea programelor eBPF, iar CO-RE (Compile Once, Run Everywhere) rezolvă problema portabilității între versiuni de kernel prin relocări BTF.
 
@@ -83,12 +85,12 @@
 \subsection{Maps eBPF și mecanismul ring buffer}
 \label{subsec:ebpf_maps}
 
-\par Maps eBPF sunt structuri de date persistente, partajate între programul din kernel și procesele din spațiul utilizator. Tipurile relevante pentru Sentinel sunt:
+\par Maps eBPF sunt structuri de stocare persistente, expuse asincron atât spațiului kernel, cât și celui utilizator. Arhitectura Sentinel implementează trei structuri fundamentale:
 
 \begin{itemize}
-    \item \texttt{BPF\_MAP\_TYPE\_HASH}: tabel hash pentru lista de PID-uri excluse (\texttt{pid\_blacklist}).
-    \item \texttt{BPF\_MAP\_TYPE\_PERCPU\_ARRAY}: array per-CPU pentru contorizarea evenimentelor pierdute (\texttt{drop\_count}).
-    \item \texttt{BPF\_MAP\_TYPE\_RINGBUF}: ring buffer de 64 MiB pentru transmiterea evenimentelor către daemon.
+    \item \texttt{BPF\_MAP\_TYPE\_HASH}: tabelă de dispersie alocată pentru păstrarea excluderilor (\texttt{pid\_blacklist}).
+    \item \texttt{BPF\_MAP\_TYPE\_PERCPU\_ARRAY}: vector instanțiat per-CPU pentru o contorizare atomică, fără blocaje (lock-free), a evenimentelor suprimate (\texttt{drop\_count}).
+    \item \texttt{BPF\_MAP\_TYPE\_RINGBUF}: coadă circulară de mare viteză, dimensionată la 64 MiB, utilizată ca bus principal de transmitere a telemetriei.
 \end{itemize}
 
 \par Ring buffer-ul (introdus în kernel 5.8) oferă avantaje față de perf buffer-ul precedent: elimină o copiere suplimentară de date, suportă rezervarea atomică a spațiului urmată de scriere directă și notificarea consumatorului printr-un descriptor de fișier epollable. Gregg \cite{Gregg2019} documentează că ring buffer-ul reduce latența de notificare cu 20--40\% față de perf buffer în scenariile de evenimente cu frecvență ridicată.
@@ -97,7 +99,7 @@
 \subsection{Kprobes: instrumentarea dinamică a kernel-ului}
 \label{subsec:kprobes}
 
-\par Kprobes sunt un mecanism de instrumentare dinamică a kernel-ului Linux care permite atașarea de handlere la aproape orice instrucțiune din codul kernel-ului fără a-l recompila \cite{Corbet2005}. La activarea unei sonde kprobe, instrucțiunea țintă este înlocuită cu un breakpoint (INT3 pe x86), iar la declanșarea acestuia controlul este transferat handler-ului eBPF înainte de execuția instrucțiunii originale. Latența introdusă este de ordinul a 100--300 ns per apel \cite{Vieira2020}, neglijabilă în raport cu durata unui syscall tipic (microsecunde--milisecunde).
+\par Mecanismul kprobes (Kernel Probes) facilitează instrumentarea la cald a codului nucleului, permițând injectarea rutinelor de tratare (handlers) la nivelul aproape oricărei instrucțiuni asamblor, fără a necesita recompilarea sistemului \cite{Corbet2005}. La activarea unei sonde kprobe, instrucțiunea originală este înlocuită cu o întrerupere software (INT3 pe x86). Când execuția lovește acest punct, controlul este deviat către mașina virtuală eBPF, după care instrucțiunea originală este reluată. Această deviere induce o latență microscopică, de ordinul a 100--300 nanosecunde per apel \cite{Vieira2020}, neglijabilă în raport cu durata unui syscall tipic (microsecunde--milisecunde).
 
 \par Sentinelul atașează kprobe-uri pe funcțiile \texttt{\_\_x64\_sys\_\{name\}} corespunzătoare celor 21 de syscall-uri monitorizate. Atașarea este dinamică: la pornire, daemonul iterează peste toate programele din colecția eBPF cu prefix \texttt{kp\_} și le atașează la funcțiile kernel corespunzătoare, fără a fi necesară enumerarea lor explicită în codul Go.
 
@@ -108,52 +110,50 @@
 \subsection{Taxonomie și clasificare}
 \label{subsec:ids_taxonomy}
 
-\par Anderson (1980) a definit pentru prima dată conceptul de monitorizare a amenințărilor de securitate ca analiză a jurnalelor de audit pentru identificarea comportamentelor anormale sau a utilizării neautorizate \cite{Anderson1980}. Denning (1987) a formalizat primul model teoretic al unui IDS ca un sistem bazat pe statistici și reguli, capabil să identifice deviații de la profiluri de comportament normale \cite{Denning1987}.
+\par Conceptul monitorizării securității a fost formalizat inițial de Anderson (1980) ca o metodă de prelucrare a jurnalelor de audit în scopul detectării utilizării neautorizate a sistemelor informatice \cite{Anderson1980}. Ulterior, Denning (1987) a publicat fundamentul teoretic al sistemelor IDS, propunând un model independent de sistem capabil să evalueze statistic deviațiile de la comportamentul istoric normal \cite{Denning1987}.
 
-\par Axelsson (2000) propune o taxonomie completă a IDS-urilor după mai multe axe \cite{Axelsson2000}:
+\par Taxonomia propusă de Axelsson (2000) \cite{Axelsson2000} oferă un cadru de clasificare în care Sentinel se raportează astfel:
 
 \begin{itemize}
-    \item \textit{Sursa datelor}: host-based (HIDS) versus network-based (NIDS). Sentinelul este un HIDS pur: monitorizează evenimentele unui singur host la nivelul apelurilor de sistem.
-    \item \textit{Metodă de detecție}: detecție bazată pe semnături (misuse detection) versus detecție bazată pe anomalii. Sentinelul combină ambele: ponderi statice per syscall (semnătură implicită) și Isolation Forest (anomalie).
-    \item \textit{Frecvența analizei}: detecție continuă versus periodică. Sentinelul operează în timp real, cu latența limitată de viteza ring buffer-ului.
-    \item \textit{Răspuns}: pasiv (alertare) versus activ (containment automat). Sentinelul implementează un răspuns activ gradual.
+    \item \textit{Sursa datelor}: HIDS (Host-based) versus NIDS (Network-based). Sentinel este exclusiv un sistem HIDS, rezoluția sa fiind limitată la apelurile de sistem ale mașinii gazdă.
+    \item \textit{Paradigma de detecție}: Detecție bazată pe semnături (misuse detection) versus anomalii. Sistemul de față abordează problema hibrid, combinând un set de euristici statice (semnături) cu un model nesupervizat pentru anomalii (Isolation Forest).
+    \item \textit{Frecvența analizei}: detecție continuă versus periodică. Sentinel operează în timp real, cu latența limitată de viteza ring buffer-ului.
+    \item \textit{Tipul de răspuns}: alertare pasivă versus limitare activă (containment). Sentinel oferă un răspuns activ, autonom și gradual.
 \end{itemize}
 
 
 \subsection{Detecție bazată pe anomalii versus semnături}
 \label{subsec:anomaly_vs_signature}
 
-\par Detecția bazată pe semnături identifică atacuri cunoscute prin potrivire de șabloane (pattern matching). Avantajul este rata scăzută a fals-pozitivelor pentru atacurile cunoscute; dezavantajul este incapacitatea de a detecta variante noi sau atacuri zero-day \cite{GarciaTe2009}.
+\par Abordarea bazată pe semnături excelează prin rata infimă a rezultatelor fals pozitive pentru atacurile cunoscute, însă suferă din cauza ineficienței totale în fața atacurilor neclasificate (zero-day) \cite{GarciaTe2009}. Alternativa, detecția anomaliilor, profilează starea de normalitate a sistemului; deși superioară în identificarea vectorilor de atac noi, aceasta este penalizată de un volum mai mare de rezultate fals pozitive \cite{Chandola2009}.
 
-\par Detecția bazată pe anomalii construiește un model al comportamentului normal și semnalează devierile semnificative. Poate detecta atacuri necunoscute anterior, dar rata fals-pozitivelor este tipic mai ridicată \cite{Chandola2009}. Un studiu comparativ al lui Goldstein și Uchida \cite{Goldstein2016} arată că Isolation Forest performează competitiv față de alte metode nesupervizate pe seturi de date cu proporție redusă de anomalii ($< 5\%$), ceea ce corespunde scenariului real al evenimentelor de securitate.
-
-\par Buczak și Guven \cite{Buczak2016} realizează o revizuire exhaustivă a metodelor de ML aplicate detectării intruziunilor și concluzionează că metodele de ansamblu (ensemble methods), inclusiv Isolation Forest, oferă cel mai bun echilibru între acuratețe și eficiență computațională pentru date de securitate cu dimensionalitate variabilă.
+\par În stabilirea algoritmului adecvat, studiul lui Goldstein și Uchida \cite{Goldstein2016} demonstrează performanța net superioară a modelului Isolation Forest pe distribuții de date unde anomaliile reprezintă un procent extrem de redus ($< 5\%$), modelând perfect realitatea evenimentelor de securitate. Această alegere este validată și de lucrarea de sinteză elaborată de Buczak și Guven \cite{Buczak2016}, care evidențiază eficiența metodelor de ansamblu (ensemble methods) pe spații de date cu dimensionalitate variabilă.
 
 
 \section{Algoritmul Isolation Forest}
 \label{sec:isolation_forest}
 
-\par Isolation Forest, propus de Liu, Ting și Zhou \cite{Liu2008IF} și extins teoretic în \cite{Liu2012IF}, este un algoritm de detecție a anomaliilor bazat pe arbori de izolare (isolation trees). Ideea centrală este că anomaliile sunt rarer și diferite față de punctele normale, deci sunt izolate mai ușor: un arbore de decizie construit prin splits aleatorii va separa un punct anomalic de restul datelor cu mai puțini pași decât ar fi necesar pentru un punct normal.
+\par Isolation Forest (iForest), formulat de Liu, Ting și Zhou \cite{Liu2008IF, Liu2012IF}, schimbă paradigma clasică a detecției anomaliilor: în loc să profileze marea masă a datelor normale, algoritmul încearcă să izoleze explicit valorile aberante. Postulatul principal este că anomaliile reprezintă instanțe rare și divergente structural; prin urmare, o serie de partiționări aleatorii (random splits) va izola un punct anormal mult mai aproape de rădăcina unui arbore de decizie comparativ cu un punct benign.
 
-\par Formal, fie $X = \{x_1, \ldots, x_n\} \subset \mathbb{R}^d$ un set de date de antrenament. Un arbore de izolare se construiește recursiv: se selectează aleatoriu un atribut $q \in \{1, \ldots, d\}$ și un punct de split $p$ uniform din intervalul $[\min_q(X), \max_q(X)]$, partiționând datele până când fiecare punct este izolat sau se atinge adâncimea maximă. Scorul de anomalie al unui punct $x$ se calculează ca:
+\par Formal, dat fiind un set de antrenament $X = \{x_1, \ldots, x_n\} \subset \mathbb{R}^d$, construirea unui arbore de izolare presupune selecția aleatoare a unui atribut $q \in \{1, \ldots, d\}$ și partiționarea spațiului pe un punct $p$ ales dintr-o distribuție uniformă în intervalul $[\min_q(X), \max_q(X)]$. Evaluarea (scorul de anomalie) pentru un punct $x$ este obținută prin relația:
 
 \begin{equation}
     s(x, n) = 2^{-\frac{E[h(x)]}{c(n)}}
     \label{eq:isolation_score}
 \end{equation}
 
-\noindent unde $E[h(x)]$ este adâncimea medie de izolare pe un ansamblu de arbori, iar $c(n) = 2H(n-1) - \frac{2(n-1)}{n}$ este adâncimea medie de căutare eșuată într-un arbore de căutare binară cu $n$ noduri, cu $H$ funcția armonică \cite{Liu2012IF}.
+\noindent unde $E[h(x)]$ reprezintă valoarea așteptată (adâncimea medie) a lungimii căii către punctul $x$ generată pe ansamblul de arbori, iar $c(n) = 2H(n-1) - \frac{2(n-1)}{n}$ este adâncimea medie asimptotică într-un arbore binar de căutare nereușită, cu $H$ funcția armonică \cite{Liu2012IF}. Scorul variază în intervalul $(0, 1)$: valori aproape de $1$ indică anomalii puternice, valori aproape de $0.5$ indică puncte normale sau ambigue.
 
-\par Scorul variază în intervalul $(0, 1)$: valori aproape de 1 indică anomalii puternice, valori aproape de 0,5 indică puncte normale sau ambigue. Sentinelul aplică o transformare sigmoidă pentru a converti scorul brut IF (care este valoarea funcției de decizie \texttt{decision\_function}, negativă pentru anomalii) într-un scor de amenințare pe scala 0--100:
+\par Deoarece scorul brut emis de model (valoarea funcției de decizie \texttt{decision\_function}, negativă pentru anomalii) necesită o conversie pe scala operațională $[0, 100]$, Sentinel aplică o transformare sigmoidă:
 
 \begin{equation}
     \text{threat\_score} = \frac{100}{1 + e^{-25 \cdot (-\text{raw\_score})}}
     \label{eq:sigmoid_transform}
 \end{equation}
 
-\par Factorul de scalare 25 a fost ales empiric pentru a produce o separare clară între punctele normale (threat\_score $< 30$) și anomalii moderate (threat\_score $\in [50, 70]$), menținând în același timp sensibilitate pentru valori extreme.
+\par Factorul de scalare 25 a fost ales empiric pentru a produce o separare clară între punctele normale (\texttt{threat\_score} $< 30$) și anomalii moderate (\texttt{threat\_score} $\in [50, 70]$), menținând în același timp sensibilitate pentru valorile extreme.
 
-\par Complexitatea de antrenament a Isolation Forest este $O(t \cdot \psi \cdot \log \psi)$, unde $t$ este numărul de arbori și $\psi$ este sub-dimensionarea (numărul de exemple per arbore). Complexitatea de inferență este $O(t \cdot \log \psi)$ per eveniment — acceptabilă pentru latența impusă de RN2 ($< 50$ ms per scor ML).
+\par Complexitatea antrenării este $\mathcal{O}(t \cdot \psi \cdot \log \psi)$, cu $t$ numărul de arbori și $\psi$ dimensiunea sub-eșantionării (subsampling), în timp ce faza de inferență se execută în timp $\mathcal{O}(t \cdot \log \psi)$ per eveniment --- acceptabilă pentru bugetul de latență impus de constrângerile decizionale în timp real (RN2).
 
 
 \section{Instrumente existente și lucrări corelate}
@@ -161,10 +161,10 @@
 
 \par \textbf{Falco} \cite{FalcoProject}, proiect incubat de CNCF și derivat din Sysdig, este cel mai apropiat echivalent open-source al Sentinelului: utilizează eBPF sau un driver de kernel pentru monitorizarea syscall-urilor și permite definirea de reguli de alertă în YAML. Spre deosebire de Sentinel, Falco nu implementează un scorer ML integrat, nu aplică acțiuni automate de containment (răspunsul este delegat unor sisteme externe precum Falcosidekick) și nu menține o bază de date locală a evenimentelor pentru analiza retrospectivă.
 
-\par \textbf{auditd} \cite{LinuxAudit} este componenta de audit a kernel-ului Linux, standardizată și prezentă în toate distribuțiile majore. Jurnalizează apeluri de sistem pe baza unor reguli configurate static. Latența sa este mai ridicată decât eBPF, deoarece evenimentele sunt scrise în jurnale și procesate asincron; în plus, auditd nu implementează nicio formă de răspuns automat.
+\par \textbf{auditd} \cite{LinuxAudit} este componenta de audit a kernel-ului Linux, standardizată și prezentă în toate distribuțiile majore. Jurnalizează apeluri de sistem pe baza unor reguli configurate static. Din pricina prelucrării asincrone și a interacțiunii constante cu sistemul de fișiere pentru stocarea jurnalelor, auditd induce o latență incompatibilă cu acțiunile de izolare în timp real, limitându-se la rolul de analiză retrospectivă (forensics).
 
-\par \textbf{Garfinkel și Rosenblum (2003)} \cite{Garfinkel2003} au propus utilizarea virtualizării și a introspection de mașini virtuale (VMI) pentru detectarea intruziunilor — o abordare mai puternică din perspectiva izolării față de atacator, deoarece monitorul rulează în afara sistemului monitorizat. DRAKVUF \cite{Lengyel2014} implementează această abordare bazată pe Xen și LibVMI, oferind o alternativă pentru medii de analiză malware. Dezavantajul este că necesită virtualizare hardware și nu este aplicabilă pe sisteme bare-metal sau în containere.
+\par \textbf{Virtual Machine Introspection (VMI)}: Metodologia teoretizată de Garfinkel și Rosenblum (2003) \cite{Garfinkel2003} propune securizarea prin mutarea monitorului în hipervizor, complet izolat de sistemul de operare monitorizat. Implementări precum DRAKVUF \cite{Lengyel2014} utilizează extensiile de virtualizare (Xen) pentru a analiza memoria mașinii virtuale din exterior. Limita severă a acestei abordări este dependența de virtualizarea hardware, fiind incompatibilă cu mediile bare-metal sau infrastructurile cloud moderne bazate pe containere.
 
-\par \textbf{kGuard} \cite{Kemerlis2012} abordează o problemă complementară — protecția kernel-ului împotriva atacurilor de tip return-to-user — prin instrumentarea statică a codului kernel la compilare. Aceste abordări de securitate prin compilare sunt ortogonale față de Sentinel, care se concentrează pe detectarea comportamentului la runtime.
+\par \textbf{kGuard} \cite{Kemerlis2012} abordează o problemă complementară --- protecția kernel-ului împotriva atacurilor de tip return-to-user --- prin instrumentarea statică a codului kernel la compilare. Aceste abordări de securitate prin compilare sunt ortogonale față de Sentinel, care se concentrează pe detectarea comportamentului la runtime.
 
 \par O constatare empirică importantă din literatura de specialitate provine din Cozzi et al. \cite{Cozzi2018}: 70\% din eșantioanele de malware Linux analizate utilizează socket-uri de rețea, 30\% apelează \texttt{ptrace} sau mapează pagini cu drepturi de execuție, iar 18\% utilizează module de kernel. Aceste statistici au constituit criteriul de selecție și de ponderare a syscall-urilor monitorizate de Sentinel.

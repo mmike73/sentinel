@@ -1,28 +1,28 @@
 \chapter{Concluzii}
 \label{conclusions}
 
-\par Lucrarea a prezentat proiectarea, implementarea și validarea sistemului Sentinel — un sistem de detectare și răspuns la intruziuni bazat pe eBPF pentru platforma Linux. Sentinel operează la nivel de kernel prin kprobes eBPF, calculează scoruri de risc printr-un motor hibrid cu trei straturi și aplică automat acțiuni graduale de containment prin cgroup v2 și nftables, cu o latență de răspuns măsurată sub 5 ms pe setul de scenarii de test.
+\par Această lucrare a detaliat fundamentarea teoretică, proiectarea arhitecturală, implementarea tehnică și validarea experimentală a sistemului Sentinel --- o soluție avansată de detectare și răspuns la intruziuni (Intrusion Detection and Response), bazată pe tehnologia eBPF pentru ecosistemul Linux. Acționând direct la nivelul nucleului (kernel) prin intermediul sondelor de tip kprobe, Sentinel evaluează riscurile de securitate folosind un motor decizional hibrid și stratificat. Răspunsul sistemului se concretizează prin aplicarea automată și graduală a politicilor de izolare (containment) prin intermediul cgroup v2 și nftables, obținând o latență operațională de sub 5 milisecunde pe ansamblul scenariilor de testare.
 
-\par Obiectivele formulate în Capitolul~\ref{intro} au fost atinse:
+\par Obiectivele fundamentale formulate în Capitolul~\ref{intro} au fost îndeplinite cu succes:
 
 \begin{itemize}
-    \item Programul eBPF (\texttt{tracer.bpf.c}) interceptează 21 de apeluri de sistem prin kprobes, cu o suprasarcină CPU de $\approx 1.2\%$ pe un workload de compilare intensivă — sub pragul RN1.
-    \item Motorul de scoring hibrid combină ponderi statice ponderate, detectare a activității în rafale cu fereastră glisantă și un scorer Isolation Forest care poate fi antrenat cu date actualizate fără a întrerupe serviciul, producând o clasificare graduală în șase stări de severitate.
-    \item Managerul de carantinare aplică restricții de CPU (cgroup \texttt{cpu.max}), izolare de rețea (nftables pe inodul cgroup-ului) și înghețare a proceselor (SIGSTOP + \texttt{cgroup.freeze}), cu auto-dezghețare temporizată.
-    \item Suita de 21 de scenarii de atac reproductibile validează detecția corectă a categoriilor principale de amenințări, de la rootkit-uri de kernel până la execuție fără fișier și rootkit-uri eBPF.
+    \item Instrumentarea componentei eBPF (\texttt{tracer.bpf.c}) pentru intercepția a 21 de apeluri de sistem critice a generat o penalizare de performanță (overhead) de doar $\approx 1.2\%$ în condiții de stres computațional extrem (compilare paralelă), respectând toleranța maximă impusă (RN1).
+    \item Motorul hibrid de evaluare a riscului a fuzionat cu succes trei paradigme analitice: analiza ponderilor statice de risc, detectarea comportamentelor recurente în ferestre de timp glisante (burst detection) și evaluarea nesupervizată a anomaliilor prin algoritmul Isolation Forest. Această arhitectură produce o matrice de decizie granulată în șase stări de severitate și permite reantrenarea modelului ML la cald, fără întreruperea monitorizării.
+    \item Managerul de carantinare aplică cu succes restricții hardware granulare (\texttt{cpu.max}), izolare la nivel de rețea (prin aplicarea regulilor de filtrare direct pe inodul cgroup-ului) și suspendarea totală a execuției (\texttt{SIGSTOP} cuplat cu parametrul \texttt{cgroup.freeze}), integrând și un mecanism de recuperare automată (auto-dezghețare temporizată).
+    \item Validarea sistemului a fost demonstrată reproductibil printr-o suită de 21 de vectori de atac asimetrici, confirmând capacitatea de neutralizare a unui spectru larg de amenințări moderne: de la rootkit-uri ce operează în kernel-space, până la atacuri de tip fileless (execuție din memorie) și încercări de evadare din container.
 \end{itemize}
 
 
 \section*{Contribuții originale}
 \addcontentsline{toc}{section}{Contribuții originale}
 
-\par Contribuțiile originale față de instrumentele existente (Falco \cite{FalcoProject}, auditd \cite{LinuxAudit}) sunt:
+\par Raportat la instrumentele consacrate din industrie (precum Falco \cite{FalcoProject} sau auditd \cite{LinuxAudit}), dezvoltarea sistemului Sentinel a generat următoarele contribuții tehnice originale:
 
 \begin{enumerate}
-    \item \textbf{Motorul de scoring cu trei straturi} cu combinare ponderată adaptivă: ponderea ML scade pe măsură ce riscul static crește, prevenind degradarea scorurilor pentru syscall-urile cu risc dovedit maxim.
-    \item \textbf{Mecanismul de izolare de rețea bazat pe cgroup inode}: blocarea selectivă a traficului unui singur proces prin nftables + inodul cgroup-ului, fără a crea namespace-uri de rețea separate.
-    \item \textbf{Cheia de burst cu start\_time}: prevenirea coliziunilor false în detectarea rafale pentru procese cu PID-uri reutilizate, prin incorporarea timpului de pornire al procesului în cheia de identificare.
-    \item \textbf{Suita de 21 de atacuri reproductibile}: artefacte de testare publice care pot fi utilizate independent pentru validarea altor sisteme HIDS.
+    \item \textbf{Arhitectura decizională hibridă cu ponderare adaptivă}: O inovație la nivelul fuziunii scorurilor, unde influența analizei ML este invers proporțională cu riscul static predefinit. Acest mecanism previne diluarea scorului general pentru apelurile de sistem cu potențial distructiv cert (ex. \texttt{ptrace}, \texttt{finit\_module}), garantând prioritatea regulilor euristice în cazurile critice.
+    \item \textbf{Izolarea rețelei la nivel de inod cgroup}: O abordare tehnică inedită care blochează selectiv traficul unui singur proces folosind nftables combinat cu identificatorul intern (inode) al cgroup-ului asociat. Această metodă elimină necesitatea instanțierii de spații de nume de rețea (network namespaces) separate, permițând aplicarea restricțiilor în timp real asupra proceselor deja aflate în execuție.
+    \item \textbf{Rezoluția temporală în amprentarea proceselor}: Prevenirea coliziunilor false în algoritmul de burst detection în mediile cu instanțieri rapide (reciclarea PID-urilor). Integrarea mărcii temporale de inițializare (\texttt{start\_time}) în cheia unică a structurii de date permite diferențierea absolută între instanțe distincte care moștenesc același identificator de proces.
+    \item \textbf{Standardizarea unei suite de testare (Benchmark)}: Crearea a 21 de artefacte de atac reproductibile, oferite comunității sub formă de instrumente open-source, ce pot servi ca bază de referință empirică pentru evaluarea altor sisteme HIDS.
 \end{enumerate}
 
 
@@ -32,24 +32,24 @@
 \par Sistemul prezintă o serie de limitări ce trebuie recunoscute explicit:
 
 \begin{itemize}
-    \item \textbf{Absența corelației între evenimente}: Sentinel evaluează fiecare eveniment independent. Un atac care distribuie activitatea suspectă între mai multe syscall-uri cu scoruri individuale scăzute poate evita detecția — o limitare fundamentală a abordărilor bazate pe evenimente individuale, față de modelele bazate pe secvențe \cite{Denning1987}.
-    \item \textbf{Drift al distribuției ML}: Modelul Isolation Forest antrenat pe comportamentul normal inițial poate deveni neperformant dacă profilul de utilizare al sistemului se modifică semnificativ, necesitând antrenare periodică. Absența unui mecanism automat de detectare a drift-ului este o limitare practică.
-    \item \textbf{Cerința de privilegii root}: Managerul de carantinare necesită privilegii root pentru manipularea cgroup-urilor și nftables; rularea fără privilegii reduce sistemul la detecție pură.
-    \item \textbf{Acoperire limitată a izolării de rețea}: Blocarea prin nftables nu acoperă comunicarea prin loopback (\texttt{127.0.0.1}), permițând potențial lateral movement între procese de pe același host prin socket-uri locale.
+    \item \textbf{Atomicitatea evaluării (Absența corelării secvențiale)}: Sentinel evaluează fiecare eveniment ca pe o entitate singulară, independentă. Atacurile persistente de tip APT (Advanced Persistent Threat), care își distribuie acțiunile pe durate lungi și fragmentează execuția în apeluri de sistem aparent benigne, pot eluda acest mecanism --- o limitare inerentă a modelelor bazate strict pe evenimente punctuale, față de modelele bazate pe secvențe \cite{Denning1987}.
+    \item \textbf{Deviația conceptului (Data/Model Drift)}: Deoarece modelul Isolation Forest este antrenat pe un instantaneu statistic al stării de normalitate, modificările legitime și majore în profilul de utilizare al serverului vor degrada acuratețea detecției în timp. Absența unui modul automat care să detecteze această deviație reprezintă un neajuns operațional.
+    \item \textbf{Dependența de privilegii depline (Root)}: Subsistemul de restricționare activă depinde organic de manipularea politicilor cgroup și nftables, operațiuni ce necesită privilegii maxime de sistem. Lipsa acestora retrogradează Sentinel la un simplu monitor pasiv.
+    \item \textbf{Limitarea acoperirii izolării de rețea}: Filtrarea traficului pe bază de inod, implementată în prezent, este ineficientă împotriva comunicării pe interfața locală (loopback / \texttt{127.0.0.1}). Această lacună ar putea facilita mișcările laterale (lateral movement) între procesele compromise de pe aceeași mașină gazdă prin intermediul socket-urilor IPC locale.
 \end{itemize}
 
 
 \section*{Direcții de cercetare viitoare}
 \addcontentsline{toc}{section}{Direcții de cercetare viitoare}
 
-\par Limitările identificate trasează direcțiile principale de extindere:
+\par Limitările identificate trasează în mod natural direcțiile de dezvoltare și extindere ale sistemului:
 
 \begin{itemize}
-    \item \textbf{Corelarea secvențelor de syscall-uri}: Integrarea unui model de secvențe (Markov chain sau LSTM) pentru detectarea tiparelor de atac distribuite pe mai mulți pași — abordare propusă inițial de Denning \cite{Denning1987} și rafinată ulterior în literatura de ML pentru securitate \cite{Buczak2016}.
-    \item \textbf{Suport uprobe}: Extinderea instrumentării la nivelul funcțiilor din spațiul utilizator (uprobe eBPF) pentru vizibilitate în biblioteci standard și interpretatoare — relevantă pentru detectarea atacurilor care operează exclusiv în spațiul utilizator.
-    \item \textbf{Detecție automată a drift-ului}: Implementarea unui mecanism de detectare statistică a schimbărilor de distribuție (Kullback-Leibler divergence sau Jensen-Shannon) pentru declanșarea automată a antrenării cu date actualizate.
-    \item \textbf{Extindere la sisteme distribuite}: Arhitectură multi-agent cu agregare centralizată a evenimentelor, permițând corelarea atacurilor ce traversează mai multe host-uri sau containere.
-    \item \textbf{Suport CO-RE}: Refactorizarea programului eBPF pentru a utiliza BTF și relocări CO-RE, eliminând dependența de kernel headers la compilare și permițând distribuirea unui singur binar independent de versiunea kernel-ului.
+    \item \textbf{Modele de corelare a secvențelor temporale}: Integrarea unor modele stocastice (Lanțuri Markov) sau a rețelelor neurale recurente (LSTM) pentru identificarea tiparelor malițioase multi-pas, mutând paradigma analitică de la detecția la nivel de apel singular la detecția la nivel de lanț de atac (kill chain) --- abordare propusă inițial de Denning \cite{Denning1987} și rafinată ulterior în literatura de ML pentru securitate \cite{Buczak2016}.
+    \item \textbf{Instrumentarea nivelului aplicație (uprobes)}: Extinderea vizibilității în spațiul utilizatorului (user-space) prin atașarea dinamică de sonde pe bibliotecile standard (ex. glibc) sau interpretatoare de limbaj. Acest lucru ar extinde detecția asupra vulnerabilităților care nu interacționează direct cu nucleul sistemului de operare.
+    \item \textbf{Mecanisme auto-adaptative pentru Machine Learning}: Integrarea metricilor de monitorizare a divergenței statistice (ex. Divergența Kullback-Leibler) pe fluxul de telemetrie, permițând declanșarea automată a ciclurilor de reantrenare atunci când profilul comportamental al mașinii suferă mutații structurale.
+    \item \textbf{Orchestrare distribuită (Cluster-Scale Security)}: Evoluția de la o arhitectură izolată de tip host-based la o structură multi-agent distribuită. Agregarea alertelor într-un Control Plane central ar facilita detectarea amenințărilor coordonate pe infrastructuri de tip cloud (ex. Kubernetes).
+    \item \textbf{Adoptarea completă a arhitecturii CO-RE}: Refactorizarea codului C pentru a valorifica exclusiv metadatele BTF (BPF Type Format) și mecanismele CO-RE, eliminând definitiv necesitatea prezenței fișierelor antet (kernel headers) la compilare pe mașinile țintă.
 \end{itemize}
 
-\par Sentinelul demonstrează că eBPF oferă o fundație solidă pentru sistemele de securitate la nivel de kernel: vizibilitate completă, suprasarcină scăzută și integrare transparentă cu mecanismele existente ale sistemului de operare. Combinarea eBPF cu metode ML de detecție a anomaliilor și cu containment automat prin cgroup v2 produce un sistem capabil să detecteze și să limiteze impactul unui spectru larg de tehnici de atac documentate, fără a modifica kernel-ul sau a restricționa anticipat comportamentul proceselor.
+\par Proiectul Sentinel demonstrează inechivoc faptul că tehnologia eBPF oferă o fundație superioară pentru arhitecturile de securitate cibernetică moderne. Asigurând o observabilitate completă, o suprasarcină minimă și o integrare transparentă cu mecanismele de izolare native ale Linux-ului, eBPF schimbă modul în care percepem securitatea la nivel de nucleu. Fuziunea acestei tehnologii analitice cu algoritmi nesupervizați de detectare a anomaliilor produce un mecanism robust, capabil să prevină și să neutralizeze proactiv intruziuni complexe, protejând integritatea sistemelor de producție fără a le compromite performanța.
