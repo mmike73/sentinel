@@ -83,93 +83,152 @@
 \citation{Lengyel2014}
 \citation{Kemerlis2012}
 \citation{Cozzi2018}
-\@writefile{toc}{\contentsline {chapter}{\numberline {3}Analiza și Proiectarea Sistemului Sentinel}{12}{chapter.3}\protected@file@percent }
+\citation{MITRE_ATTCK}
+\@writefile{toc}{\contentsline {section}{\numberline {2.6}Peisajul amenințărilor în ecosistemul Linux și Cadrul MITRE ATT\&CK}{11}{section.2.6}\protected@file@percent }
+\newlabel{sec:threat_landscape}{{2.6}{11}{Peisajul amenințărilor în ecosistemul Linux și Cadrul MITRE ATT\&CK}{section.2.6}{}}
+\citation{TripleCross2022}
+\citation{PwnKit2022}
+\citation{Gruss2016}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.6.1}Rootkit-uri și persistența la nivel de nucleu}{12}{subsection.2.6.1}\protected@file@percent }
+\newlabel{subsec:rootkits}{{2.6.1}{12}{Rootkit-uri și persistența la nivel de nucleu}{subsection.2.6.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.6.2}Escaladarea privilegiilor}{12}{subsection.2.6.2}\protected@file@percent }
+\newlabel{subsec:privesc}{{2.6.2}{12}{Escaladarea privilegiilor}{subsection.2.6.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.6.3}Evaziunea defensivă și execuția \textit  {fileless}}{12}{subsection.2.6.3}\protected@file@percent }
+\newlabel{subsec:fileless}{{2.6.3}{12}{Evaziunea defensivă și execuția \textit {fileless}}{subsection.2.6.3}{}}
+\citation{Elastic2022}
+\citation{Bundles2021}
+\citation{Cozzi2018}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.6.4}Injectarea de procese}{13}{subsection.2.6.4}\protected@file@percent }
+\newlabel{subsec:process_injection}{{2.6.4}{13}{Injectarea de procese}{subsection.2.6.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.6.5}Accesul la credențiale și comanda-și-control}{13}{subsection.2.6.5}\protected@file@percent }
+\newlabel{subsec:c2}{{2.6.5}{13}{Accesul la credențiale și comanda-și-control}{subsection.2.6.5}{}}
+\@writefile{toc}{\contentsline {chapter}{\numberline {3}Analiza și Proiectarea Sistemului Sentinel}{14}{chapter.3}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\newlabel{chap:ch3}{{3}{12}{Analiza și Proiectarea Sistemului Sentinel}{chapter.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.1}Cerințe funcționale și nefuncționale}{12}{section.3.1}\protected@file@percent }
-\newlabel{sec:requirements}{{3.1}{12}{Cerințe funcționale și nefuncționale}{section.3.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.2}Arhitectura sistemului}{13}{section.3.2}\protected@file@percent }
-\newlabel{sec:architecture}{{3.2}{13}{Arhitectura sistemului}{section.3.2}{}}
+\newlabel{chap:ch3}{{3}{14}{Analiza și Proiectarea Sistemului Sentinel}{chapter.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.1}Cerințe funcționale și nefuncționale}{14}{section.3.1}\protected@file@percent }
+\newlabel{sec:requirements}{{3.1}{14}{Cerințe funcționale și nefuncționale}{section.3.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.2}Arhitectura sistemului}{15}{section.3.2}\protected@file@percent }
+\newlabel{sec:architecture}{{3.2}{15}{Arhitectura sistemului}{section.3.2}{}}
 \citation{Kerrisk2010}
-\@writefile{lof}{\contentsline {figure}{\numberline {3.1}{\ignorespaces Arhitectura sistemului Sentinel: fluxul de date de la kprobe la carantinare.}}{14}{figure.3.1}\protected@file@percent }
-\newlabel{fig:architecture}{{3.1}{14}{Arhitectura sistemului Sentinel: fluxul de date de la kprobe la carantinare}{figure.3.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.3}Proiectarea programului eBPF}{14}{section.3.3}\protected@file@percent }
-\newlabel{sec:ebpf_design}{{3.3}{14}{Proiectarea programului eBPF}{section.3.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3.1}{\ignorespaces Arhitectura sistemului Sentinel: fluxul de date de la kprobe la carantinare.}}{16}{figure.3.1}\protected@file@percent }
+\newlabel{fig:architecture}{{3.1}{16}{Arhitectura sistemului Sentinel: fluxul de date de la kprobe la carantinare}{figure.3.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.3}Proiectarea programului eBPF}{16}{section.3.3}\protected@file@percent }
+\newlabel{sec:ebpf_design}{{3.3}{16}{Proiectarea programului eBPF}{section.3.3}{}}
 \citation{Cozzi2018}
 \citation{Buczak2016}
-\@writefile{toc}{\contentsline {section}{\numberline {3.4}Proiectarea motorului de scoring}{15}{section.3.4}\protected@file@percent }
-\newlabel{sec:scoring_design}{{3.4}{15}{Proiectarea motorului de scoring}{section.3.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.1}Stratul 1: Evaluarea statică a apelurilor de sistem}{15}{subsection.3.4.1}\protected@file@percent }
-\newlabel{subsec:static_weights}{{3.4.1}{15}{Stratul 1: Evaluarea statică a apelurilor de sistem}{subsection.3.4.1}{}}
-\newlabel{eq:static_score}{{3.1}{15}{Stratul 1: Evaluarea statică a apelurilor de sistem}{equation.3.4.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.2}Stratul 2: Analiza comportamentală a activității în rafală (Burst Detection)}{15}{subsection.3.4.2}\protected@file@percent }
-\newlabel{subsec:burst_detection}{{3.4.2}{15}{Stratul 2: Analiza comportamentală a activității în rafală (Burst Detection)}{subsection.3.4.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3.1}{\ignorespaces Parametrii de detectare a activității în rafale}}{16}{table.3.1}\protected@file@percent }
-\newlabel{tab:burst_params}{{3.1}{16}{Parametrii de detectare a activității în rafale}{table.3.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.3}Stratul 3: Analiza contextuală bazată pe căile fișierelor}{16}{subsection.3.4.3}\protected@file@percent }
-\newlabel{subsec:path_alerts}{{3.4.3}{16}{Stratul 3: Analiza contextuală bazată pe căile fișierelor}{subsection.3.4.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.4}Integrarea scorerului ML}{16}{subsection.3.4.4}\protected@file@percent }
-\newlabel{subsec:ml_integration}{{3.4.4}{16}{Integrarea scorerului ML}{subsection.3.4.4}{}}
-\newlabel{eq:blended_score}{{3.2}{16}{Integrarea scorerului ML}{equation.3.4.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.4}Proiectarea motorului de scoring}{17}{section.3.4}\protected@file@percent }
+\newlabel{sec:scoring_design}{{3.4}{17}{Proiectarea motorului de scoring}{section.3.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.1}Stratul 1: Evaluarea statică a apelurilor de sistem}{17}{subsection.3.4.1}\protected@file@percent }
+\newlabel{subsec:static_weights}{{3.4.1}{17}{Stratul 1: Evaluarea statică a apelurilor de sistem}{subsection.3.4.1}{}}
+\newlabel{eq:static_score}{{3.1}{17}{Stratul 1: Evaluarea statică a apelurilor de sistem}{equation.3.4.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.2}Stratul 2: Analiza comportamentală a activității în rafală (Burst Detection)}{17}{subsection.3.4.2}\protected@file@percent }
+\newlabel{subsec:burst_detection}{{3.4.2}{17}{Stratul 2: Analiza comportamentală a activității în rafală (Burst Detection)}{subsection.3.4.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3.1}{\ignorespaces Parametrii de detectare a activității în rafale}}{18}{table.3.1}\protected@file@percent }
+\newlabel{tab:burst_params}{{3.1}{18}{Parametrii de detectare a activității în rafale}{table.3.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.3}Stratul 3: Analiza contextuală bazată pe căile fișierelor}{18}{subsection.3.4.3}\protected@file@percent }
+\newlabel{subsec:path_alerts}{{3.4.3}{18}{Stratul 3: Analiza contextuală bazată pe căile fișierelor}{subsection.3.4.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.4}Integrarea scorerului ML}{18}{subsection.3.4.4}\protected@file@percent }
+\newlabel{subsec:ml_integration}{{3.4.4}{18}{Integrarea scorerului ML}{subsection.3.4.4}{}}
+\newlabel{eq:blended_score}{{3.2}{18}{Integrarea scorerului ML}{equation.3.4.2}{}}
 \citation{Menage2007}
-\@writefile{toc}{\contentsline {section}{\numberline {3.5}Mașina de stări pentru carantinare}{17}{section.3.5}\protected@file@percent }
-\newlabel{sec:state_machine}{{3.5}{17}{Mașina de stări pentru carantinare}{section.3.5}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3.2}{\ignorespaces Mașina de stări: praguri de scor și acțiuni de carantinare corespunzătoare}}{17}{table.3.2}\protected@file@percent }
-\newlabel{tab:states}{{3.2}{17}{Mașina de stări: praguri de scor și acțiuni de carantinare corespunzătoare}{table.3.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.6}Schema bazei de date}{18}{section.3.6}\protected@file@percent }
-\newlabel{sec:db_schema}{{3.6}{18}{Schema bazei de date}{section.3.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.5}Mașina de stări pentru carantinare}{19}{section.3.5}\protected@file@percent }
+\newlabel{sec:state_machine}{{3.5}{19}{Mașina de stări pentru carantinare}{section.3.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3.2}{\ignorespaces Mașina de stări: praguri de scor și acțiuni de carantinare corespunzătoare}}{19}{table.3.2}\protected@file@percent }
+\newlabel{tab:states}{{3.2}{19}{Mașina de stări: praguri de scor și acțiuni de carantinare corespunzătoare}{table.3.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.6}Schema bazei de date}{20}{section.3.6}\protected@file@percent }
+\newlabel{sec:db_schema}{{3.6}{20}{Schema bazei de date}{section.3.6}{}}
 \citation{CiliumEBPF}
 \citation{Pedregosa2011}
-\@writefile{toc}{\contentsline {chapter}{\numberline {4}Implementare și Testare}{19}{chapter.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {4}Implementare și Testare}{21}{chapter.4}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\newlabel{chap:ch4}{{4}{19}{Implementare și Testare}{chapter.4}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.1}Mediul de dezvoltare și testare}{19}{section.4.1}\protected@file@percent }
-\newlabel{sec:dev_env}{{4.1}{19}{Mediul de dezvoltare și testare}{section.4.1}{}}
+\newlabel{chap:ch4}{{4}{21}{Implementare și Testare}{chapter.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.1}Mediul de dezvoltare și testare}{21}{section.4.1}\protected@file@percent }
+\newlabel{sec:dev_env}{{4.1}{21}{Mediul de dezvoltare și testare}{section.4.1}{}}
 \citation{Rice2023}
 \citation{CiliumEBPF}
-\@writefile{toc}{\contentsline {section}{\numberline {4.2}Implementarea programului eBPF}{20}{section.4.2}\protected@file@percent }
-\newlabel{sec:ebpf_impl}{{4.2}{20}{Implementarea programului eBPF}{section.4.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.3}Implementarea daemonului Go}{20}{section.4.3}\protected@file@percent }
-\newlabel{sec:daemon_impl}{{4.3}{20}{Implementarea daemonului Go}{section.4.3}{}}
-\newlabel{eq:burst_key}{{4.1}{21}{Implementarea daemonului Go}{equation.4.3.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.4}Implementarea scorerului ML}{21}{section.4.4}\protected@file@percent }
-\newlabel{sec:scorer_impl}{{4.4}{21}{Implementarea scorerului ML}{section.4.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.2}Implementarea programului eBPF}{22}{section.4.2}\protected@file@percent }
+\newlabel{sec:ebpf_impl}{{4.2}{22}{Implementarea programului eBPF}{section.4.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.3}Implementarea daemonului Go}{22}{section.4.3}\protected@file@percent }
+\newlabel{sec:daemon_impl}{{4.3}{22}{Implementarea daemonului Go}{section.4.3}{}}
+\newlabel{eq:burst_key}{{4.1}{23}{Implementarea daemonului Go}{equation.4.3.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.4}Implementarea scorerului ML}{23}{section.4.4}\protected@file@percent }
+\newlabel{sec:scorer_impl}{{4.4}{23}{Implementarea scorerului ML}{section.4.4}{}}
 \citation{Pedregosa2011}
-\@writefile{toc}{\contentsline {section}{\numberline {4.5}Implementarea managerului de carantinare}{22}{section.4.5}\protected@file@percent }
-\newlabel{sec:quarantine_impl}{{4.5}{22}{Implementarea managerului de carantinare}{section.4.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.6}Suita de teste de atac}{23}{section.4.6}\protected@file@percent }
-\newlabel{sec:attack_suite}{{4.6}{23}{Suita de teste de atac}{section.4.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.6.1}Metodologia de testare}{23}{subsection.4.6.1}\protected@file@percent }
-\newlabel{subsec:test_method}{{4.6.1}{23}{Metodologia de testare}{subsection.4.6.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.5}Implementarea managerului de carantinare}{24}{section.4.5}\protected@file@percent }
+\newlabel{sec:quarantine_impl}{{4.5}{24}{Implementarea managerului de carantinare}{section.4.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.6}Suita de teste de atac}{25}{section.4.6}\protected@file@percent }
+\newlabel{sec:attack_suite}{{4.6}{25}{Suita de teste de atac}{section.4.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6.1}Metodologia de testare}{25}{subsection.4.6.1}\protected@file@percent }
+\newlabel{subsec:test_method}{{4.6.1}{25}{Metodologia de testare}{subsection.4.6.1}{}}
 \citation{Cozzi2018}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.6.2}Scenariile de bază (REP-01 -- REP-12)}{24}{subsection.4.6.2}\protected@file@percent }
-\newlabel{subsec:basic_attacks}{{4.6.2}{24}{Scenariile de bază (REP-01 -- REP-12)}{subsection.4.6.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {4.1}{\ignorespaces Scenariile de atac din setul de bază și rezultatele așteptate}}{24}{table.4.1}\protected@file@percent }
-\newlabel{tab:basic_attacks}{{4.1}{24}{Scenariile de atac din setul de bază și rezultatele așteptate}{table.4.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6.2}Scenariile de bază (REP-01 -- REP-12)}{26}{subsection.4.6.2}\protected@file@percent }
+\newlabel{subsec:basic_attacks}{{4.6.2}{26}{Scenariile de bază (REP-01 -- REP-12)}{subsection.4.6.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4.1}{\ignorespaces Scenariile de atac din setul de bază și rezultatele așteptate}}{26}{table.4.1}\protected@file@percent }
+\newlabel{tab:basic_attacks}{{4.1}{26}{Scenariile de atac din setul de bază și rezultatele așteptate}{table.4.1}{}}
 \citation{Hogan2022}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.6.3}Scenariile avansate (REP-13 -- REP-21)}{25}{subsection.4.6.3}\protected@file@percent }
-\newlabel{subsec:advanced_attacks}{{4.6.3}{25}{Scenariile avansate (REP-13 -- REP-21)}{subsection.4.6.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {4.2}{\ignorespaces Scenariile de atac din setul avansat și rezultatele așteptate}}{25}{table.4.2}\protected@file@percent }
-\newlabel{tab:advanced_attacks}{{4.2}{25}{Scenariile de atac din setul avansat și rezultatele așteptate}{table.4.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.7}Considerente de performanță}{26}{section.4.7}\protected@file@percent }
-\newlabel{sec:performance}{{4.7}{26}{Considerente de performanță}{section.4.7}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {4.3}{\ignorespaces Comparație de performanță: compilare kernel cu și fără Sentinel activ}}{26}{table.4.3}\protected@file@percent }
-\newlabel{tab:perf}{{4.3}{26}{Comparație de performanță: compilare kernel cu și fără Sentinel activ}{table.4.3}{}}
-\@writefile{toc}{\contentsline {chapter}{\numberline {5}Concluzii}{28}{chapter.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6.3}Scenariile avansate (REP-13 -- REP-21)}{27}{subsection.4.6.3}\protected@file@percent }
+\newlabel{subsec:advanced_attacks}{{4.6.3}{27}{Scenariile avansate (REP-13 -- REP-21)}{subsection.4.6.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4.2}{\ignorespaces Scenariile de atac din setul avansat și rezultatele așteptate}}{27}{table.4.2}\protected@file@percent }
+\newlabel{tab:advanced_attacks}{{4.2}{27}{Scenariile de atac din setul avansat și rezultatele așteptate}{table.4.2}{}}
+\citation{MITRE_ATTCK}
+\@writefile{toc}{\contentsline {section}{\numberline {4.7}Clasificarea și descrierea teoretică a suitei de atacuri}{28}{section.4.7}\protected@file@percent }
+\newlabel{sec:attack_classification}{{4.7}{28}{Clasificarea și descrierea teoretică a suitei de atacuri}{section.4.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.7.1}Rootkit-uri și persistență la nivel de nucleu (Module LKM)}{28}{subsection.4.7.1}\protected@file@percent }
+\newlabel{subsec:attack_lkm}{{4.7.1}{28}{Rootkit-uri și persistență la nivel de nucleu (Module LKM)}{subsection.4.7.1}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.1}REP-01: Modul de kernel inofensiv pentru declanșarea intercepției LKM}{28}{lstlisting.4.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.2}REP-17: Apelarea finit\_module via ctypes în Python}{29}{lstlisting.4.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.3}REP-18: Interceptarea semnalelor UNIX (stil Reptile)}{29}{lstlisting.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.7.2}Injectarea de procese și manipularea memoriei}{30}{subsection.4.7.2}\protected@file@percent }
+\newlabel{subsec:attack_injection}{{4.7.2}{30}{Injectarea de procese și manipularea memoriei}{subsection.4.7.2}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.4}REP-11: Atașarea la un proces vizat prin ptrace}{30}{lstlisting.4.4}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.5}REP-14: Etapele de golire a procesului (Process Hollowing)}{30}{lstlisting.4.5}\protected@file@percent }
+\citation{TripleCross2022}
+\citation{Bundles2021}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.6}REP-19: Lanțul de atac eBPF Rootkit}{31}{lstlisting.4.6}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.7}REP-20: Extragerea credențialelor din memorie via /proc/pid/mem}{31}{lstlisting.4.7}\protected@file@percent }
+\citation{Elastic2022}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.7.3}Evaziunea defensivă: execuție \textit  {fileless} și memorie RWX}{32}{subsection.4.7.3}\protected@file@percent }
+\newlabel{subsec:attack_fileless}{{4.7.3}{32}{Evaziunea defensivă: execuție \textit {fileless} și memorie RWX}{subsection.4.7.3}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.8}REP-07: Alocare și execuție shellcode în memorie RWX}{32}{lstlisting.4.8}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.9}REP-13: Lanțul de execuție fileless via memfd\_create}{32}{lstlisting.4.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.7.4}Anomalii de rețea, exfiltrare și C2}{33}{subsection.4.7.4}\protected@file@percent }
+\newlabel{subsec:attack_network}{{4.7.4}{33}{Anomalii de rețea, exfiltrare și C2}{subsection.4.7.4}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.10}REP-04 / REP-12: Rafală de conexiuni TCP anormale}{33}{lstlisting.4.10}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.11}REP-15: Conexiune C2 urmată de instanțierea unui shell}{33}{lstlisting.4.11}\protected@file@percent }
+\citation{PwnKit2022}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.7.5}Escaladarea privilegiilor și evadarea din medii izolate}{34}{subsection.4.7.5}\protected@file@percent }
+\newlabel{subsec:attack_privesc}{{4.7.5}{34}{Escaladarea privilegiilor și evadarea din medii izolate}{subsection.4.7.5}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.12}REP-02: Tentative eșuate dar interceptate de setuid și capset}{34}{lstlisting.4.12}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.13}REP-21: Evadarea din container via namespace pivot}{34}{lstlisting.4.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.7.6}Manipularea fișierelor, persistență și recoltare}{35}{subsection.4.7.6}\protected@file@percent }
+\newlabel{subsec:attack_files}{{4.7.6}{35}{Manipularea fișierelor, persistență și recoltare}{subsection.4.7.6}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.14}REP-08: Alterarea fișierelor log în Bash}{35}{lstlisting.4.14}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.15}REP-09: Bibliotecă malițioasă pre-încărcată via LD\_PRELOAD}{35}{lstlisting.4.15}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.16}REP-16: Enumerarea fișierelor cu credențiale}{35}{lstlisting.4.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.7.7}Anomalii de execuție și epuizarea resurselor}{36}{subsection.4.7.7}\protected@file@percent }
+\newlabel{subsec:attack_exec}{{4.7.7}{36}{Anomalii de execuție și epuizarea resurselor}{subsection.4.7.7}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.17}REP-05: Lansarea unui shell de către un worker web}{36}{lstlisting.4.17}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4.18}REP-10: Fork Bomb limitat (200 de procese efemere)}{36}{lstlisting.4.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.8}Considerente de performanță}{37}{section.4.8}\protected@file@percent }
+\newlabel{sec:performance}{{4.8}{37}{Considerente de performanță}{section.4.8}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4.3}{\ignorespaces Comparație de performanță: compilare kernel cu și fără Sentinel activ}}{37}{table.4.3}\protected@file@percent }
+\newlabel{tab:perf}{{4.3}{37}{Comparație de performanță: compilare kernel cu și fără Sentinel activ}{table.4.3}{}}
+\@writefile{toc}{\contentsline {chapter}{\numberline {5}Concluzii}{38}{chapter.5}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\newlabel{conclusions}{{5}{28}{Concluzii}{chapter.5}{}}
+\newlabel{conclusions}{{5}{38}{Concluzii}{chapter.5}{}}
 \citation{FalcoProject}
 \citation{LinuxAudit}
 \citation{Denning1987}
-\@writefile{toc}{\contentsline {section}{Contribuții originale}{29}{section*.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{Limitări}{29}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{Contribuții originale}{39}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{Limitări}{39}{section*.3}\protected@file@percent }
 \citation{Denning1987}
 \citation{Buczak2016}
-\@writefile{toc}{\contentsline {section}{Direcții de cercetare viitoare}{30}{section*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{Direcții de cercetare viitoare}{40}{section*.4}\protected@file@percent }
 \bibdata{references}
+\bibcite{TripleCross2022}{Alb22}
 \bibcite{Anderson1980}{And80}
 \bibcite{Axelsson2000}{Axe00}
 \bibcite{Buczak2016}{BG16}
@@ -179,8 +238,11 @@
 \bibcite{FalcoProject}{{Clo}24}
 \bibcite{Corbet2005}{CRKH05}
 \bibcite{Denning1987}{Den87}
+\bibcite{Elastic2022}{{Ela}23}
+\@writefile{toc}{\contentsline {chapter}{\bbl@ensure@romanian  {Bibliografie}}{42}{chapter*.5}\protected@file@percent }
+\bibcite{Gruss2016}{GMF{$^{+}$}16}
+\bibcite{Bundles2021}{{Goo}21}
 \bibcite{Garfinkel2003}{GR03}
-\@writefile{toc}{\contentsline {chapter}{\bbl@ensure@romanian  {Bibliografie}}{32}{chapter*.5}\protected@file@percent }
 \bibcite{Gregg2019}{Gre19}
 \bibcite{GarciaTe2009}{GTDVMFV09}
 \bibcite{Goldstein2016}{GU16}
@@ -192,10 +254,12 @@
 \bibcite{Liu2008IF}{LTZ08}
 \bibcite{Liu2012IF}{LTZ12}
 \bibcite{Menage2007}{Men07}
+\bibcite{MITRE_ATTCK}{{MIT}24}
 \bibcite{McCanne1993}{MJ93}
 \bibcite{Pedregosa2011}{PVG{$^{+}$}11}
+\bibcite{PwnKit2022}{{Qua}22}
 \bibcite{Rice2023}{Ric23}
 \bibcite{Roesch1999}{Roe99}
 \bibcite{Vieira2020}{VCP{$^{+}$}20}
 \bibcite{Wright2002}{WCS{$^{+}$}02}
-\gdef \@abspage@last{39}
+\gdef \@abspage@last{50}

@@ -1,6 +1,12 @@
 \newcommand{\etalchar}[1]{$^{#1}$}
 \begin{thebibliography}{GTDVMFV09}
 
+\bibitem[Alb22]{TripleCross2022}
+Pat Albors.
+\newblock {TripleCross}: A linux {eBPF} rootkit.
+\newblock \url{https://github.com/h3xduck/TripleCross}, 2022.
+\newblock Online; accessed May 2025.
+
 \bibitem[And80]{Anderson1980}
 James~P. Anderson.
 \newblock Computer security threat monitoring and surveillance.
@@ -55,6 +61,29 @@ Dorothy~E. Denning.
 \newblock An intrusion-detection model.
 \newblock {\em IEEE Transactions on Software Engineering}, 13(2):222--232,
   1987.
+
+\bibitem[{Ela}23]{Elastic2022}
+{Elastic Security Labs}.
+\newblock Linux defensive evasion: \texttt{memfd\_create} and fileless malware
+  execution.
+\newblock
+  \url{https://www.elastic.co/security-labs/linux-defense-evasion-via-memfd-create},
+  2023.
+\newblock Online; accessed May 2025.
+
+\bibitem[GMF{\etalchar{+}}16]{Gruss2016}
+Daniel Gruss, Cl{\'e}mentine Maurice, Anders Fogh, Moritz Lipp, and Stefan
+  Mangard.
+\newblock Prefetch side-channel attacks: Bypassing {SMAP} and kernel {ASLR}.
+\newblock In {\em Proceedings of the 2016 ACM SIGSAC Conference on Computer and
+  Communications Security (CCS)}, pages 368--379. ACM, 2016.
+
+\bibitem[{Goo}21]{Bundles2021}
+{Google Project Zero}.
+\newblock In-the-wild exploitation of \texttt{/proc/pid/mem} for credential
+  theft on linux.
+\newblock \url{https://googleprojectzero.blogspot.com}, 2021.
+\newblock Online; accessed May 2025.
 
 \bibitem[GR03]{Garfinkel2003}
 Tal Garfinkel and Mendel Rosenblum.
@@ -131,6 +160,13 @@ Paul Menage.
 \newblock In {\em Proceedings of the Linux Symposium}, volume~2, pages 45--57,
   2007.
 
+\bibitem[{MIT}24]{MITRE_ATTCK}
+{MITRE Corporation}.
+\newblock {MITRE ATT\&CK}: Adversarial tactics, techniques, and common
+  knowledge --- enterprise matrix for linux.
+\newblock \url{https://attack.mitre.org}, 2024.
+\newblock Online; accessed May 2025.
+
 \bibitem[MJ93]{McCanne1993}
 Steven McCanne and Van Jacobson.
 \newblock The {BSD} packet filter: A new architecture for user-level packet
@@ -145,6 +181,15 @@ Fabian Pedregosa, Ga{\"e}l Varoquaux, Alexandre Gramfort, Vincent Michel,
   Matthieu Brucher, Matthieu Perrot, and {\'E}douard Duchesnay.
 \newblock Scikit-learn: Machine learning in {Python}.
 \newblock {\em Journal of Machine Learning Research}, 12:2825--2830, 2011.
+
+\bibitem[{Qua}22]{PwnKit2022}
+{Qualys Research Team}.
+\newblock {PwnKit}: Local privilege escalation vulnerability discovered in
+  {polkit}'s \texttt{pkexec} ({CVE-2021-4034}).
+\newblock
+  \url{https://blog.qualys.com/vulnerabilities-threat-research/2022/01/25/pwnkit-local-privilege-escalation-vulnerability-discovered-in-polkits-pkexec-cve-2021-4034},
+  2022.
+\newblock Online; accessed May 2025.
 
 \bibitem[Ric23]{Rice2023}
 Liz Rice.

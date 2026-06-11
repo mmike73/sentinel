@@ -168,3 +168,42 @@
 \par \textbf{kGuard} \cite{Kemerlis2012} abordează o problemă complementară --- protecția kernel-ului împotriva atacurilor de tip return-to-user --- prin instrumentarea statică a codului kernel la compilare. Aceste abordări de securitate prin compilare sunt ortogonale față de Sentinel, care se concentrează pe detectarea comportamentului la runtime.
 
 \par O constatare empirică importantă din literatura de specialitate provine din Cozzi et al. \cite{Cozzi2018}: 70\% din eșantioanele de malware Linux analizate utilizează socket-uri de rețea, 30\% apelează \texttt{ptrace} sau mapează pagini cu drepturi de execuție, iar 18\% utilizează module de kernel. Aceste statistici au constituit criteriul de selecție și de ponderare a syscall-urilor monitorizate de Sentinel.
+
+
+\section{Peisajul amenințărilor în ecosistemul Linux și Cadrul MITRE ATT\&CK}
+\label{sec:threat_landscape}
+
+\par Evaluarea oricărui sistem modern de detectare a intruziunilor necesită raportarea riguroasă la un cadru standardizat de amenințări. În ecosistemul Linux, vectorii de atac au evoluat de la simple scripturi de exploatare la arhitecturi complexe, mapate exhaustiv în cadrul MITRE ATT\&CK \cite{MITRE_ATTCK}. Evaluarea eficacității sistemului Sentinel se fundamentează pe o analiză teoretică a 21 de scenarii de atac care acoperă tactici critice: persistență, escaladarea privilegiilor, evaziune defensivă, acces la credențiale și execuție.
+
+\par În continuare sunt detaliate principalele categorii teoretice de amenințări care justifică arhitectura de monitorizare a sistemului:
+
+\subsection{Rootkit-uri și persistența la nivel de nucleu}
+\label{subsec:rootkits}
+
+\par Compromiterea nucleului Linux s-a realizat istoric prin rootkit-uri de tip LKM (\textit{Loadable Kernel Module}), care vizează alterarea fluxului de execuție din spațiul privilegiat. Un etalon istoric este rootkit-ul \textit{Diamorphine}, apărut în 2013, care interceptează apeluri de sistem (precum \texttt{getdents64}) pentru a ascunde procese și asigură o portiță de acces (\textit{backdoor}) gestionată prin semnale magice. Încărcarea acestor module este semnalizată primar de apelul \texttt{init\_module}.
+
+\par Pentru a evita lăsarea de artefacte pe disc, atacatorii sofisticați utilizează apelul \texttt{finit\_module}, care permite încărcarea unui modul compilat direct dintr-un descriptor de fișier menținut exclusiv în memoria volatilă. Amenințările de generație nouă includ rootkit-urile eBPF, exemplificate de modelul teoretizat de \textit{TripleCross} în 2022 \cite{TripleCross2022}. Acestea demonstrează capacitatea atacatorilor de a subverti însăși tehnologia eBPF pentru a intercepta apeluri de sistem și a orchestra injecții de cod invizibile scanărilor tradiționale.
+
+\subsection{Escaladarea privilegiilor}
+\label{subsec:privesc}
+
+\par Obținerea drepturilor absolute de administrator (UID 0) pornind de la un cont restricționat reprezintă un obiectiv primar în faza de post-exploatare. Pe sistemele Linux, această acțiune este mediată în principal de apelurile \texttt{setuid} (pentru alterarea directă a identificatorului de utilizator) și \texttt{capset} (pentru modificarea fină a capabilităților POSIX). Un exemplu elocvent al severității acestei clase de atacuri este vulnerabilitatea \textit{PwnKit} (CVE-2021-4034), care a exploatat o corupție de memorie în componenta PolicyKit pentru a permite execuția cu succes a funcției \texttt{setuid(0)} pe majoritatea distribuțiilor majore \cite{PwnKit2022}.
+
+\subsection{Evaziunea defensivă și execuția \textit{fileless}}
+\label{subsec:fileless}
+
+\par Malware-ul de tip \textit{fileless} execută instrucțiuni exclusiv în memorie, ocolind soluțiile antivirus tradiționale fundamentate pe analiza sistemului de fișiere. Această tehnică a fost facilitată structural de introducerea apelului \texttt{memfd\_create} în nucleul Linux 3.17 (2014), care permite crearea unui fișier anonim susținut doar de memoria RAM. Atacatorul poate scrie codul malițios (de exemplu, un binar ELF) în acest descriptor și îl poate executa prin apelul \texttt{execve} (referențiind calea virtuală \texttt{/proc/self/fd/}), fără ca executabilul să persiste vreodată pe un mediu de stocare fizic \cite{Gruss2016}.
+
+\subsection{Injectarea de procese}
+\label{subsec:process_injection}
+
+\par Apelul de sistem \texttt{ptrace}, conceput inițial ca mecanism legitim pentru depanare (\textit{debugging}), a devenit instrumentul canonic pentru tehnicile de injectare a proceselor. Acesta permite unui proces malițios să suspende o țintă legitimă (\texttt{PTRACE\_ATTACH}), să îi altereze pointerul de instrucțiune (\texttt{PTRACE\_SETREGS}) și să scrie \textit{shellcode} direct în spațiul său de adresare (\texttt{PTRACE\_POKETEXT}).
+
+\par O derivare complexă a acestei tehnici este golirea proceselor (\textit{Process Hollowing} sau \textit{RunPE}). Un proces legitim este instanțiat și suspendat, i se alocă o regiune de memorie nouă, simultan lizibilă, scriptibilă și executabilă (RWX) prin \texttt{mmap}, iar fluxul normal este înlocuit cu logica atacatorului \cite{Elastic2022}.
+
+\subsection{Accesul la credențiale și comanda-și-control}
+\label{subsec:c2}
+
+\par \textbf{Furtul de credențiale.} Atacatorii enumeră sistematic fișiere sensibile (de exemplu, \texttt{/etc/shadow}, chei SSH private) printr-o cascadă de apeluri \texttt{openat}. Pentru extragerea parolelor aflate în uz, tehnici similare utilitarului Mimikatz (Windows) sunt aplicate pe Linux prin citirea memoriei proceselor rulante, mapată în \texttt{/proc/<pid>/mem} \cite{Bundles2021}.
+
+\par \textbf{Exfiltrarea datelor.} Stabilirea canalelor de comandă și control implică adesea instanțierea de \textit{reverse shells}, procedeu în care gazda compromisă inițiază conexiuni TCP ieșitoare (\textit{outbound}) către atacator, ocolind astfel regulile restrictive de firewall pentru traficul intrant. Amprenta comportamentală constă în serii de apeluri \texttt{socket} și \texttt{connect}, urmate de deturnarea fluxurilor de intrare/ieșire prin invocarea unui shell via \texttt{execve} \cite{Cozzi2018}.
