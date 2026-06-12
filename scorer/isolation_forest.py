@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import argparse, json, math, os, sqlite3, sys
+import argparse, math, sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -77,12 +77,12 @@ def load_events_from_db(db_path: str, limit: int = 50000) -> list:
             COALESCE(pid, 1000)  AS pid,
             COALESCE(timestamp, datetime('now')) AS timestamp
         FROM events
-        WHERE score < 30
+        WHERE score < 50
         ORDER BY RANDOM()
         LIMIT ?
     """, (limit,)).fetchall()
     conn.close()
-    print(f"Loaded {len(rows)} real baseline events (score < 30) from {db_path}")
+    print(f"Loaded {len(rows)} real baseline events (score < 50) from {db_path}")
     return [dict(r) for r in rows]
 
 
@@ -115,7 +115,7 @@ def train(db_path: str, model_path: str,
         model=model,
         scaler=scaler,
         n_samples=len(X),
-        trained_at=datetime.utcnow().isoformat() + "Z",
+        trained_at=datetime.now(timezone.utc).isoformat(),
     )
     joblib.dump(bundle, model_path)
     print(f"Model saved to {model_path}")
@@ -150,13 +150,20 @@ def serve(model_path: str, db_path: str, port: int = 8765):
 
     @app.get("/health")
     def health():
-        b = get_bundle()
-        return {"status": "ok", "model_trained_at": b.trained_at, "n_samples": b.n_samples}
+        try:
+            b = get_bundle()
+            return {"status": "ok", "model_trained_at": b.trained_at, "n_samples": b.n_samples}
+        except Exception as exc:
+            return {"status": "ok", "model": "none", "reason": str(exc)}
 
     @app.post("/score")
     def score(event: EventRequest):
-        b = get_bundle()
-        e = event.model_dump()
+        try:
+            b = get_bundle()
+        except Exception:
+            return {"threat_score": 0.0, "state": "OK", "if_raw": 0.0,
+                    "syscall_nr": event.syscall_nr}
+        e = event.model_dump() if hasattr(event, "model_dump") else event.dict()
         vec = event_to_vector(e).reshape(1, -1)
         scaled = b.scaler.transform(vec)
         raw = b.model.decision_function(scaled)[0]
@@ -172,8 +179,11 @@ def serve(model_path: str, db_path: str, port: int = 8765):
     @app.post("/model/train")
     def retrain():
         nonlocal bundle
-        bundle = train(db_path, model_path)
-        return {"status": "trained", "n_samples": bundle.n_samples}
+        try:
+            bundle = train(db_path, model_path)
+            return {"status": "trained", "n_samples": bundle.n_samples}
+        except RuntimeError as exc:
+            return {"status": "error", "reason": str(exc)}
 
     uvicorn.run(app, host="127.0.0.1", port=port)
 

@@ -223,13 +223,15 @@ class Runner:
         time.sleep(0.5)
         self.vm_capture(
             "sudo sqlite3 /var/sentinel/events.db 'PRAGMA wal_checkpoint(TRUNCATE);'")
+        self.vm_capture(
+            "sudo sqlite3 /var/sentinel/events.db 'VACUUM;'")
         self.vm("sudo sqlite3 /var/sentinel/events.db '.backup /tmp/sentinel_snapshot.db'",
                 check=False)
         self.vm_capture(
-            "sudo bash -c 'nohup /usr/local/bin/sentinel-daemon "
+            "sudo bash -c 'ulimit -n 65536; nohup /usr/local/bin/sentinel-daemon "
             "-db /var/sentinel/events.db -obj /var/sentinel/tracer.bpf.o "
             "-scorer-url http://127.0.0.1:8765 >> /var/sentinel/daemon.log 2>&1 &'; "
-            "sudo bash -c 'nohup /usr/local/bin/sentinel-quarantine "
+            "sudo bash -c 'ulimit -n 65536; nohup /usr/local/bin/sentinel-quarantine "
             "-db /var/sentinel/events.db >> /var/sentinel/quarantine.log 2>&1 &'")
         self.scp_from_vm("/tmp/sentinel_snapshot.db", dest / "events.db")
 
@@ -300,18 +302,13 @@ class Runner:
         time.sleep(1.5)
         out = self.vm_capture(
             "sudo sqlite3 /var/sentinel/events.db "
-            "'SELECT id,alert_type,score,state,comm FROM events;'")
+            "\"SELECT id,alert_type,score,state,comm FROM events "
+            "WHERE alert_type='TestAlert' LIMIT 5;\"")
         self.info(f"DB row: {out}")
         if "TestAlert" in out:
             self.ok("Synthetic injector: RUNNING")
         else:
             self.fail("Synthetic injector did not write to DB")
-
-        self.step("Clearing smoke-test data")
-        self.vm("sudo sqlite3 /var/sentinel/events.db "
-                "'PRAGMA busy_timeout=10000; "
-                "DELETE FROM events; DELETE FROM quarantine_log; "
-                "PRAGMA wal_checkpoint(TRUNCATE);'")
 
         self.step("Uploading scorer")
         self.scp_to_vm(self.repo / "scorer" / "isolation_forest.py",
@@ -326,6 +323,30 @@ class Runner:
             timeout=180)
         self.ok("Scorer venv ready")
 
+        self.step("Pre-training scorer on existing baseline data")
+        n_raw = self.vm_capture(
+            "sudo sqlite3 /var/sentinel/events.db "
+            '"SELECT COUNT(*) FROM events WHERE score < 50;"')
+        try:
+            n_baseline = int(n_raw.strip())
+        except ValueError:
+            n_baseline = 0
+        if n_baseline >= 1000:
+            self.vm(
+                "sudo /var/sentinel/venv/bin/python3 /var/sentinel/isolation_forest.py "
+                "train --db /var/sentinel/events.db --model /var/sentinel/model.pkl",
+                timeout=300)
+            self.ok(f"Scorer pre-trained on {n_baseline} baseline events")
+        else:
+            self.warn(f"Only {n_baseline} baseline events — scorer will train on demand")
+
+        self.step("Clearing smoke-test data")
+        self.vm("sudo sqlite3 /var/sentinel/events.db "
+                "'PRAGMA busy_timeout=10000; "
+                "DELETE FROM events; DELETE FROM quarantine_log; "
+                "PRAGMA wal_checkpoint(TRUNCATE);'")
+        self.vm("sudo sqlite3 /var/sentinel/events.db 'VACUUM;'", timeout=120)
+
     def phase_upload_attacks(self) -> None:
         self.section("PHASE 3 — Upload attack suites")
         self.vm("mkdir -p /tmp/attacks")
@@ -337,7 +358,9 @@ class Runner:
             name = d.name
             self.step(f"Uploading {name}")
             self.vm(f"mkdir -p /tmp/attacks/{name}")
-            self.vagrant(f"scp attacks/{name}/ :/tmp/attacks/{name}/")
+            conf = self._ensure_ssh_conf()
+            self.run(["scp", "-r", "-F", str(conf),
+                      str(d) + "/.", f"default:/tmp/attacks/{name}/"])
             self.vm(
                 f'inner="/tmp/attacks/{name}/{name}"; '
                 f'[ -d "$inner" ] && mv "$inner"/* "/tmp/attacks/{name}/" '
@@ -414,10 +437,10 @@ class Runner:
         else:
             self.warn("Scorer is DOWN — starting it now")
             self.vm(
-                "sudo bash -c 'nohup /var/sentinel/venv/bin/python3 "
+                "sudo bash -c 'ulimit -n 65536; nohup /var/sentinel/venv/bin/python3 "
                 "/var/sentinel/isolation_forest.py serve --port 8765 "
                 ">> /var/sentinel/scorer.log 2>&1 &'")
-            time.sleep(4)
+            time.sleep(8)
             out = self.vm_capture("curl --max-time 5 -s http://127.0.0.1:8765/health 2>/dev/null || echo DOWN")
             if "ok" in out:
                 self.ok(f"Scorer started: {out}")
@@ -448,7 +471,7 @@ class Runner:
             "pgrep sentinel-daemon > /dev/null 2>&1 && echo 1 || echo 0")
         if daemon_up.strip() == "0":
             self.vm(
-                "sudo bash -c 'nohup /usr/local/bin/sentinel-daemon "
+                "sudo bash -c 'ulimit -n 65536; nohup /usr/local/bin/sentinel-daemon "
                 "-db /var/sentinel/events.db "
                 "-obj /var/sentinel/tracer.bpf.o "
                 "-scorer-url http://127.0.0.1:8765 "
@@ -467,10 +490,10 @@ class Runner:
             "pgrep -f sentinel-quarantine > /dev/null 2>&1 && echo 1 || echo 0")
         if qm_up.strip() == "0":
             self.vm(
-                "sudo bash -c 'nohup /usr/local/bin/sentinel-quarantine "
+                "sudo bash -c 'ulimit -n 65536; nohup /usr/local/bin/sentinel-quarantine "
                 "-db /var/sentinel/events.db "
                 ">> /var/sentinel/quarantine.log 2>&1 &'")
-            time.sleep(2)
+            time.sleep(4)
         qm_pid = self.vm_capture("pgrep -af sentinel-quarantine 2>/dev/null || echo NOT_RUNNING")
         if "NOT_RUNNING" in qm_pid:
             self.warn("Quarantine manager not running")
