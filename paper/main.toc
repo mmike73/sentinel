@@ -17,25 +17,25 @@
 \contentsline {section}{\numberline {2.3}Sisteme de detectare a intruziunilor}{9}{section.2.3}%
 \contentsline {subsection}{\numberline {2.3.1}Taxonomie și clasificare}{9}{subsection.2.3.1}%
 \contentsline {subsection}{\numberline {2.3.2}Detecție bazată pe anomalii versus semnături}{9}{subsection.2.3.2}%
-\contentsline {section}{\numberline {2.4}Algoritmul Isolation Forest}{10}{section.2.4}%
+\contentsline {section}{\numberline {2.4}Algoritmul Isolation Forest}{9}{section.2.4}%
 \contentsline {section}{\numberline {2.5}Instrumente existente și lucrări corelate}{10}{section.2.5}%
 \contentsline {section}{\numberline {2.6}Peisajul amenințărilor în ecosistemul Linux și Cadrul MITRE ATT\&CK}{11}{section.2.6}%
-\contentsline {subsection}{\numberline {2.6.1}Rootkit-uri și persistența la nivel de nucleu}{12}{subsection.2.6.1}%
+\contentsline {subsection}{\numberline {2.6.1}Rootkit-uri și persistența la nivel de nucleu}{11}{subsection.2.6.1}%
 \contentsline {subsection}{\numberline {2.6.2}Escaladarea privilegiilor}{12}{subsection.2.6.2}%
 \contentsline {subsection}{\numberline {2.6.3}Evaziunea defensivă și execuția \textit {fileless}}{12}{subsection.2.6.3}%
-\contentsline {subsection}{\numberline {2.6.4}Injectarea de procese}{13}{subsection.2.6.4}%
-\contentsline {subsection}{\numberline {2.6.5}Accesul la credențiale și comanda-și-control}{13}{subsection.2.6.5}%
+\contentsline {subsection}{\numberline {2.6.4}Injectarea de procese}{12}{subsection.2.6.4}%
+\contentsline {subsection}{\numberline {2.6.5}Accesul la credențiale și controlul (command-and-control / c2)}{13}{subsection.2.6.5}%
 \contentsline {chapter}{\numberline {3}Analiza și Proiectarea Sistemului Sentinel}{14}{chapter.3}%
 \contentsline {section}{\numberline {3.1}Cerințe funcționale și nefuncționale}{14}{section.3.1}%
 \contentsline {section}{\numberline {3.2}Arhitectura sistemului}{15}{section.3.2}%
-\contentsline {section}{\numberline {3.3}Proiectarea programului eBPF}{16}{section.3.3}%
+\contentsline {section}{\numberline {3.3}Proiectarea programului eBPF}{15}{section.3.3}%
 \contentsline {section}{\numberline {3.4}Proiectarea motorului de scoring}{17}{section.3.4}%
-\contentsline {subsection}{\numberline {3.4.1}Stratul 1: Evaluarea statică a apelurilor de sistem}{17}{subsection.3.4.1}%
-\contentsline {subsection}{\numberline {3.4.2}Stratul 2: Analiza comportamentală a activității în rafală (Burst Detection)}{17}{subsection.3.4.2}%
-\contentsline {subsection}{\numberline {3.4.3}Stratul 3: Analiza contextuală bazată pe căile fișierelor}{18}{subsection.3.4.3}%
+\contentsline {subsection}{\numberline {3.4.1}Etapa 1: Evaluarea statică a apelurilor de sistem}{17}{subsection.3.4.1}%
+\contentsline {subsection}{\numberline {3.4.2}Etapa 2: Analiza comportamentală a activității în rafală (Burst Detection)}{17}{subsection.3.4.2}%
+\contentsline {subsection}{\numberline {3.4.3}Etapa 3: Analiza contextuală bazată pe căile fișierelor}{18}{subsection.3.4.3}%
 \contentsline {subsection}{\numberline {3.4.4}Integrarea scorerului ML}{18}{subsection.3.4.4}%
 \contentsline {section}{\numberline {3.5}Mașina de stări pentru carantinare}{19}{section.3.5}%
-\contentsline {section}{\numberline {3.6}Schema bazei de date}{20}{section.3.6}%
+\contentsline {section}{\numberline {3.6}Schema bazei de date}{19}{section.3.6}%
 \contentsline {chapter}{\numberline {4}Implementare și Testare}{21}{chapter.4}%
 \contentsline {section}{\numberline {4.1}Mediul de dezvoltare și testare}{21}{section.4.1}%
 \contentsline {section}{\numberline {4.2}Implementarea programului eBPF}{22}{section.4.2}%
@@ -44,19 +44,18 @@
 \contentsline {section}{\numberline {4.5}Implementarea managerului de carantinare}{29}{section.4.5}%
 \contentsline {section}{\numberline {4.6}Suita de teste de atac}{32}{section.4.6}%
 \contentsline {subsection}{\numberline {4.6.1}Metodologia de testare}{32}{subsection.4.6.1}%
-\contentsline {subsection}{\numberline {4.6.2}Scenariile de bază (REP-01 -- REP-12)}{33}{subsection.4.6.2}%
-\contentsline {subsection}{\numberline {4.6.3}Scenariile avansate (REP-13 -- REP-21)}{34}{subsection.4.6.3}%
-\contentsline {section}{\numberline {4.7}Clasificarea și descrierea teoretică a suitei de atacuri}{35}{section.4.7}%
+\contentsline {subsection}{\numberline {4.6.2}Scenariile de bază (REP-01 -- REP-12)}{32}{subsection.4.6.2}%
+\contentsline {subsection}{\numberline {4.6.3}Scenariile avansate (REP-13 -- REP-21)}{33}{subsection.4.6.3}%
+\contentsline {section}{\numberline {4.7}Clasificarea și descrierea teoretică a suitei de atacuri}{34}{section.4.7}%
 \contentsline {subsection}{\numberline {4.7.1}Rootkit-uri și persistență la nivel de nucleu (Module LKM)}{35}{subsection.4.7.1}%
 \contentsline {subsection}{\numberline {4.7.2}Injectarea de procese și manipularea memoriei}{36}{subsection.4.7.2}%
 \contentsline {subsection}{\numberline {4.7.3}Evaziunea defensivă: execuție \textit {fileless} și memorie RWX}{38}{subsection.4.7.3}%
 \contentsline {subsection}{\numberline {4.7.4}Anomalii de rețea, exfiltrare și C2}{39}{subsection.4.7.4}%
 \contentsline {subsection}{\numberline {4.7.5}Escaladarea privilegiilor și evadarea din medii izolate}{40}{subsection.4.7.5}%
 \contentsline {subsection}{\numberline {4.7.6}Manipularea fișierelor, persistență și recoltare}{41}{subsection.4.7.6}%
-\contentsline {subsection}{\numberline {4.7.7}Anomalii de execuție și epuizarea resurselor}{43}{subsection.4.7.7}%
-\contentsline {section}{\numberline {4.8}Considerente de performanță}{43}{section.4.8}%
-\contentsline {chapter}{\numberline {5}Concluzii}{45}{chapter.5}%
-\contentsline {section}{Contribuții originale}{46}{section*.2}%
-\contentsline {section}{Limitări}{46}{section*.3}%
-\contentsline {section}{Direcții de cercetare viitoare}{47}{section*.4}%
-\contentsline {chapter}{\bbl@ensure@romanian {Bibliografie}}{49}{chapter*.5}%
+\contentsline {subsection}{\numberline {4.7.7}Anomalii de execuție și epuizarea resurselor}{42}{subsection.4.7.7}%
+\contentsline {chapter}{\numberline {5}Concluzii}{44}{chapter.5}%
+\contentsline {section}{Contribuții originale}{45}{section*.2}%
+\contentsline {section}{Limitări}{45}{section*.3}%
+\contentsline {section}{Direcții de cercetare viitoare}{46}{section*.4}%
+\contentsline {chapter}{\bbl@ensure@romanian {Bibliografie}}{48}{chapter*.5}%

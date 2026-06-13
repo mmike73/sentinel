@@ -4,45 +4,45 @@ The top-level auxiliary file: main.aux
 The style file: alpha.bst
 Database file #1: references.bib
 Warning--I didn't find a database entry for "Hogan2022"
-You've used 33 entries,
+You've used 30 entries,
             2543 wiz_defined-function locations,
-            779 strings with 10695 characters,
-and the built_in function-call counts, 13871 in all, are:
-= -- 1402
-> -- 639
+            759 strings with 10100 characters,
+and the built_in function-call counts, 12513 in all, are:
+= -- 1272
+> -- 555
 < -- 28
-+ -- 224
-- -- 218
-* -- 931
-:= -- 2221
-add.period$ -- 117
-call.type$ -- 33
-change.case$ -- 216
-chr.to.int$ -- 33
-cite$ -- 33
-duplicate$ -- 554
-empty$ -- 1032
-format.name$ -- 263
-if$ -- 2901
++ -- 193
+- -- 188
+* -- 816
+:= -- 1989
+add.period$ -- 108
+call.type$ -- 30
+change.case$ -- 193
+chr.to.int$ -- 30
+cite$ -- 30
+duplicate$ -- 511
+empty$ -- 943
+format.name$ -- 231
+if$ -- 2635
 int.to.chr$ -- 1
 int.to.str$ -- 0
-missing$ -- 28
-newline$ -- 178
-num.names$ -- 99
-pop$ -- 252
+missing$ -- 24
+newline$ -- 163
+num.names$ -- 90
+pop$ -- 233
 preamble$ -- 1
-purify$ -- 251
+purify$ -- 225
 quote$ -- 0
-skip$ -- 463
+skip$ -- 428
 stack$ -- 0
-substring$ -- 735
-swap$ -- 120
+substring$ -- 655
+swap$ -- 117
 text.length$ -- 28
 text.prefix$ -- 17
 top$ -- 0
-type$ -- 244
+type$ -- 224
 warning$ -- 0
-while$ -- 124
-width$ -- 35
-write$ -- 450
+while$ -- 112
+width$ -- 32
+write$ -- 411
 (There was 1 warning)

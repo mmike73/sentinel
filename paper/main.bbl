@@ -51,11 +51,6 @@ Emilio Cozzi, Mariano Graziano, Yanick Fratantonio, and Davide Balzarotti.
 \newblock \url{https://falco.org}, 2024.
 \newblock Online; accessed May 2025.
 
-\bibitem[CRKH05]{Corbet2005}
-Jonathan Corbet, Alessandro Rubini, and Greg Kroah-Hartman.
-\newblock {\em Linux Device Drivers}.
-\newblock O'Reilly Media, 3rd edition, 2005.
-
 \bibitem[Den87]{Denning1987}
 Dorothy~E. Denning.
 \newblock An intrusion-detection model.
@@ -104,12 +99,6 @@ Pedro Garcia-Teodoro, Jesus Diaz-Verdejo, Gabriel Maci{\'a}s-Fern{\'a}ndez, and
 \newblock Anomaly-based network intrusion detection: Techniques, systems and
   challenges.
 \newblock {\em Computers \& Security}, 28(1--2):18--28, 2009.
-
-\bibitem[GU16]{Goldstein2016}
-Markus Goldstein and Seiichi Uchida.
-\newblock A comparative evaluation of unsupervised anomaly detection algorithms
-  for multivariate data.
-\newblock {\em PLOS ONE}, 11(4):e0152173, 2016.
 
 \bibitem[Ker10]{Kerrisk2010}
 Michael Kerrisk.
@@ -202,13 +191,6 @@ Martin Roesch.
 \newblock Snort --- lightweight intrusion detection for networks.
 \newblock In {\em Proceedings of the 13th USENIX Conference on System
   Administration (LISA '99)}, pages 229--238. USENIX Association, 1999.
-
-\bibitem[VCP{\etalchar{+}}20]{Vieira2020}
-Marcos A.~M. Vieira, Matheus~S. Castanho, Raphael~D. Pac{\'i}fico, Elerson
-  R.~S. Santos, Eduardo P.~M. C{\^a}mara~J{\'u}nior, and Luiz F.~M. Vieira.
-\newblock Fast packet processing with {eBPF} and {XDP}: Concepts, code,
-  challenges, and applications.
-\newblock {\em ACM Computing Surveys}, 53(1):16:1--16:36, 2020.
 
 \bibitem[WCS{\etalchar{+}}02]{Wright2002}
 Chris Wright, Crispin Cowan, Stephen Smalley, James Morris, and Greg
