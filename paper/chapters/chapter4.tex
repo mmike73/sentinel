@@ -95,7 +95,7 @@ static __always_inline int submit_event(__u32 syscall_nr)
 
 \par Kprobe-urile sunt atașate la wrapper-urile \texttt{\_\_x64\_sys\_*} care primesc un singur argument --- un pointer la structura \texttt{pt\_regs} cu argumentele originale ale syscall-ului. Accesul direct la argumentele syscall-ului necesită dereferențierea unui nivel suplimentar de \texttt{pt\_regs} (\textit{inner regs}), o idiomă documentată în \cite{Rice2023} și necesară pentru compatibilitatea cu versiunile kernel $\geq 4.17$ pe x86\_64.
 
-\par Mecanismul de drop count este implementat cu \texttt{\_\_sync\_fetch\_and\_add}, operație atomică per-CPU: când ring buffer-ul este plin și rezervarea eșuează, contorul de drop al CPU-ului curent este incrementat. Un goroutine din daemon citește periodic contoarele și loghează creșterile, satisfăcând cerința RN4.
+\par Mecanismul de drop count este implementat cu \texttt{\_\_sync\_fetch\_and\_add}, operație atomică per-CPU: când ring buffer-ul este plin și rezervarea eșuează, contorul de drop al CPU-ului curent este incrementat. Un goroutine din daemon citește periodic contoarele și loghează creșterile.
 
 
 \section{Implementarea daemonului Go}
@@ -788,33 +788,3 @@ done
 wait
 \end{lstlisting}
 \par\textit{Sentinel interceptează \texttt{clone} (syscall 56) $\rightarrow$ contor \texttt{ForkBomb} $\uparrow$ la fiecare copil; $\geq$ 50 de apeluri \texttt{clone}/s $\rightarrow$ pragul de anomalie depășit $\rightarrow$ scor $\approx 75$ $\rightarrow$ ISOLATE via constrângere \texttt{cgroup}.}
-
-
-\section{Considerente de performanță}
-\label{sec:performance}
-
-\par Penalizarea de performanță a eBPF a fost evaluată comparând utilizarea CPU pe un workload de compilare kernel (\texttt{make -j4 bzImage}) cu și fără daemonul Sentinel activ, în mașina virtuală de test. Rezultatele medii pe 5 rulări sunt prezentate în Tabelul~\ref{tab:perf}.
-
-\begin{table}[htbp]
-\begin{center}
-\begin{tabular}{|p{120pt}|p{80pt}|p{80pt}|}
-\hline
-\textbf{Configurație} & \textbf{Durată medie (s)} & \textbf{CPU user\%} \\
-\hline\hline
-Fără Sentinel                & 187.4 & 94.2 \\
-\hline
-Cu Sentinel (fără scorer ML) & 189.7 & 95.4 \\
-\hline
-Cu Sentinel (cu scorer ML)   & 192.1 & 96.1 \\
-\hline
-\end{tabular}
-\end{center}
-\caption{Comparație de performanță: compilare kernel cu și fără Sentinel activ}
-\label{tab:perf}
-\end{table}
-
-\par Penalizarea de performanță introdusă de daemonul eBPF fără scorer ML este de $\approx 1.2\%$ din durata totală, sub pragul nefuncțional RN1 de 2\%. Scorerul ML adaugă $\approx 2.7$ secunde suplimentare, dar acesta operează asincron și nu blochează procesarea principală; impactul reflectă consumul de CPU al inferenței Python pe thread-uri separate.
-
-\par Latența de carantinare (de la inserarea evenimentului în baza de date la aplicarea acțiunii) a fost măsurată prin câmpul \texttt{latency\_ms} din \texttt{quarantine\_log}. Pe cele 11 scenarii din setul de bază care produc stări $\geq$ THROTTLE, latența medie înregistrată a fost de $1.8$ ms pentru THROTTLE, $3.1$ ms pentru ISOLATE (include apelurile nftables) și $0.9$ ms pentru FREEZE (\texttt{SIGSTOP} este imediat, \texttt{cgroup.freeze} este asincron). Toate valorile se încadrează în cerința RN2 ($< 5$ ms).
-
-\par În testul REP-10 (fork bomb, 100+ apeluri \texttt{clone}/s timp de 5 secunde), nu s-au înregistrat drop-uri în ring buffer-ul de 64 MiB. Aceasta confirmă că dimensionarea ring buffer-ului este adecvată pentru burst-uri moderate de syscall-uri.

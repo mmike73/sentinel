@@ -154,7 +154,7 @@ TODO: check factuality further
 
 \par Factorul de scalare 25 a fost ales empiric pentru a produce o separare clară între punctele normale (\texttt{threat\_score} $< 30$) și anomalii moderate (\texttt{threat\_score} $\in [50, 70]$), menținând în același timp sensibilitate pentru valorile extreme.
 
-\par Complexitatea antrenării este $\mathcal{O}(t \cdot \psi \cdot \log \psi)$, cu $t$ numărul de arbori și $\psi$ dimensiunea sub-eșantionării (subsampling), în timp ce faza de inferență se execută în timp $\mathcal{O}(t \cdot \log \psi)$ per eveniment --- acceptabilă pentru bugetul de latență impus de constrângerile decizionale în timp real (RN2).
+\par Complexitatea antrenării este $\mathcal{O}(t \cdot \psi \cdot \log \psi)$, cu $t$ numărul de arbori și $\psi$ dimensiunea sub-eșantionării (subsampling), în timp ce faza de inferență se execută în timp $\mathcal{O}(t \cdot \log \psi)$ per eveniment --- acceptabilă pentru un eventual buget de latență.
 
 
 \section{Instrumente existente și lucrări corelate}
