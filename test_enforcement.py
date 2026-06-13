@@ -80,6 +80,8 @@ def start_process(shell_cmd: str) -> int:
 
 
 def kill_process(pid: int) -> None:
+    # Unfreeze cgroup first — sending SIGCONT to a frozen cgroup blocks the SSH session
+    vmc(f"sudo bash -c 'echo 0 > /sys/fs/cgroup/sentinel/quarantine_{pid}/cgroup.freeze 2>/dev/null || true'")
     vmc(f"sudo kill -CONT {pid} 2>/dev/null || true")
     vmc(f"sudo kill -9 {pid} 2>/dev/null || true")
     vmc(f"sudo rm -rf /sys/fs/cgroup/sentinel/quarantine_{pid} 2>/dev/null || true")
@@ -133,7 +135,7 @@ def ensure_stack() -> None:
     vmc("sudo nft flush table inet sentinel_quarantine 2>/dev/null || true")
 
     vmc(
-        "sudo bash -c 'nohup /usr/local/bin/sentinel-daemon "
+        "sudo bash -c 'ulimit -n 65536; nohup /usr/local/bin/sentinel-daemon "
         "-db /var/sentinel/events.db "
         "-obj /var/sentinel/tracer.bpf.o "
         ">> /var/sentinel/daemon.log 2>&1 &'"
@@ -141,7 +143,7 @@ def ensure_stack() -> None:
     time.sleep(3)
 
     vmc(
-        "sudo bash -c 'nohup /usr/local/bin/sentinel-quarantine "
+        "sudo bash -c 'ulimit -n 65536; nohup /usr/local/bin/sentinel-quarantine "
         "-db /var/sentinel/events.db "
         "-unfreeze-after 120s "
         ">> /var/sentinel/quarantine.log 2>&1 &'"
@@ -172,9 +174,12 @@ def test_freeze() -> None:
     info(f"cgroup.freeze     → {cg_freeze}")
     info(f"quarantine_log    → {qlog}")
 
-    check("FREEZE proc state=T",
-          "T (stopped)" in proc_state or "T (tracing stop)" in proc_state,
-          proc_state.strip())
+    # cgroup v2 freeze on kernel 6.1 reports S (sleeping) not T (stopped) while truly frozen
+    is_frozen = (
+        "T (stopped)" in proc_state or "T (tracing stop)" in proc_state
+        or ("S (sleeping)" in proc_state and cg_freeze.strip() == "1")
+    )
+    check("FREEZE proc state frozen", is_frozen, proc_state.strip())
     check("FREEZE cgroup.freeze=1", cg_freeze.strip() == "1", f"cgroup.freeze={cg_freeze.strip()}")
     check("FREEZE quarantine_log success",
           qlog.get("success", "0") == "1",

@@ -82,8 +82,8 @@ WantedBy=multi-user.target
 SVCEOF
 
 systemctl daemon-reload
-systemctl enable sentinel-synthetic
-systemctl start sentinel-synthetic
-systemctl is-active sentinel-synthetic && echo "Synthetic injector: RUNNING" || echo "Synthetic injector: FAILED"
+# systemctl enable sentinel-synthetic
+# systemctl start sentinel-synthetic
+# systemctl is-active sentinel-synthetic && echo "Synthetic injector: RUNNING" || echo "Synthetic injector: FAILED"
 
-echo "=== Sentinel install complete ==="
+# echo "=== Sentinel install complete ==="

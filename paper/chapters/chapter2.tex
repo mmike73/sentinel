@@ -14,7 +14,7 @@
 
 \par Din perspectiva securității cibernetice, monitorizarea apelurilor de sistem oferă o vizibilitate exhaustivă și imposibil de eludat asupra comportamentului real al unui proces: o rutină malițioasă care încearcă să încarce un modul de kernel va invoca inevitabil \texttt{finit\_module} (syscall 313), o tentativă de escaladare a privilegiilor va apela \texttt{setuid} (syscall 105) sau \texttt{capset} (syscall 126), în timp ce exfiltrarea datelor va fi tradusă prin generarea de apeluri \texttt{socket} și \texttt{connect} (syscall-urile 41, respectiv 42) \cite{Love2010}.
 
-\par Kernel-ul Linux x86\_64 expune peste 300 de apeluri de sistem, dar numai un subansamblu specific prezintă interes direct din perspectiva securității. Sistemul Sentinel monitorizează 21 de apeluri de sistem, selectate pe baza incidenței lor empirice în anatomia malware-ului pentru Linux \cite{Cozzi2018}, acoperind categoriile: execuție de procese, modificare de privilegii, operații de memorie, activitate de rețea, operații pe fișiere sensibile și management de module de kernel. Tabelul~\ref{tab:syscalls_risk} prezintă o selecție cu greutățile de risc corespunzătoare.
+\par Kernel-ul Linux x86\_64 expune peste 300 de apeluri de sistem, dar numai un subansamblu specific prezintă interes direct din perspectiva securității. Sistemul Sentinel monitorizează 20 de apeluri de sistem, selectate pe baza incidenței lor empirice în anatomia malware-ului pentru Linux \cite{Cozzi2018}, acoperind categoriile: execuție de procese, modificare de privilegii, operații de memorie, activitate de rețea, operații pe fișiere sensibile și management de module de kernel. Tabelul~\ref{tab:syscalls_risk} prezintă o selecție cu ponderile de risc corespunzătoare.
 
 \begin{table}[htbp]
 \begin{center}
@@ -48,7 +48,7 @@
 \hline
 \end{tabular}
 \end{center}
-\caption{Selecție de apeluri de sistem monitorizate de Sentinel cu greutățile de risc asociate}
+\caption{Selecție de apeluri de sistem monitorizate de Sentinel cu ponderile de risc asociate}
 \label{tab:syscalls_risk}
 \end{table}
 
@@ -64,7 +64,7 @@
 \subsection{Namespaces și grupuri de control (cgroups)}
 \label{subsec:cgroups}
 
-\par Paradigmele Namespaces (PID, net, mount, user, UTS, IPC) asigură izolarea stării globale a kernel-ului în contexte virtualizate pentru grupuri distincte de procese, reprezentând fundamentul tehnologiilor moderne de containerizare \cite{Kerrisk2010}. În paralel, mecanismul Control Groups v2 (cgroup v2), fundamentat inițial de Menage \cite{Menage2007} și standardizat în nucleul 4.5, gestionează alocarea, limitarea și monitorizarea resurselor fizice (CPU, memorie, I/O bloc) pentru ierarhii de procese.
+\par Mecanismele interne ale nucleului (PID, net, mount, user, UTS, IPC) asigură izolarea stării globale a kernel-ului în contexte virtualizate pentru grupuri distincte de procese, reprezentând fundamentul tehnologiilor moderne de containerizare \cite{Kerrisk2010}. În paralel, mecanismul Control Groups v2 (cgroup v2), fundamentat inițial de Menage \cite{Menage2007} și standardizat în nucleul 4.5, gestionează alocarea, limitarea și monitorizarea resurselor fizice (CPU, memorie, I/O bloc) pentru ierarhii de procese.
 
 \par Spre deosebire de iterația anterioară (cgroup v1), arhitectura v2 propune o ierarhie unificată și un model de delegare mai coerent, eliminând ambiguitățile de configurare care apăreau la apartenența simultană a unui proces la sub-arbori de control diferiți. Arhitectura de izolare a sistemului Sentinel impune la pornire prezența controllerelor \texttt{cpu} și \texttt{memory} în \texttt{/sys/fs/cgroup/cgroup.controllers}, condiție satisfăcută nativ pe distribuțiile Debian 12 și Ubuntu 22.04+.
 
@@ -90,19 +90,18 @@
 \begin{itemize}
     \item \texttt{BPF\_MAP\_TYPE\_HASH}: tabelă de dispersie alocată pentru păstrarea excluderilor (\texttt{pid\_blacklist}).
     \item \texttt{BPF\_MAP\_TYPE\_PERCPU\_ARRAY}: vector instanțiat per-CPU pentru o contorizare atomică, fără blocaje (lock-free), a evenimentelor suprimate (\texttt{drop\_count}).
-    \item \texttt{BPF\_MAP\_TYPE\_RINGBUF}: coadă circulară de mare viteză, dimensionată la 64 MiB, utilizată ca bus principal de transmitere a telemetriei.
+    \item \texttt{BPF\_MAP\_TYPE\_RINGBUF}: coadă circulară de mare viteză, dimensionată la 64 MiB, utilizată ca bus principal de transmitere a evenimentelor interceptate.
 \end{itemize}
 
-\par Ring buffer-ul (introdus în kernel 5.8) oferă avantaje față de perf buffer-ul precedent: elimină o copiere suplimentară de date, suportă rezervarea atomică a spațiului urmată de scriere directă și notificarea consumatorului printr-un descriptor de fișier epollable. Gregg \cite{Gregg2019} documentează că ring buffer-ul reduce latența de notificare cu 20--40\% față de perf buffer în scenariile de evenimente cu frecvență ridicată.
+\par Ring buffer-ul (introdus în kernel 5.8) oferă avantaje față de perf buffer-ul precedent: elimină o copiere suplimentară de date, suportă rezervarea atomică a spațiului urmată de scriere directă și notificarea consumatorului printr-un descriptor de fișier abilitat în acest sens prin mecanismul epoll. Gregg \cite{Gregg2019} documentează că ring buffer-ul reduce latența de notificare cu 20--40\% față de perf buffer în scenariile de evenimente cu frecvență ridicată.
 
 
 \subsection{Kprobes: instrumentarea dinamică a kernel-ului}
 \label{subsec:kprobes}
 
-\par Mecanismul kprobes (Kernel Probes) facilitează instrumentarea la cald a codului nucleului, permițând injectarea rutinelor de tratare (handlers) la nivelul aproape oricărei instrucțiuni asamblor, fără a necesita recompilarea sistemului \cite{Corbet2005}. La activarea unei sonde kprobe, instrucțiunea originală este înlocuită cu o întrerupere software (INT3 pe x86). Când execuția lovește acest punct, controlul este deviat către mașina virtuală eBPF, după care instrucțiunea originală este reluată. Această deviere induce o latență microscopică, de ordinul a 100--300 nanosecunde per apel \cite{Vieira2020}, neglijabilă în raport cu durata unui syscall tipic (microsecunde--milisecunde).
+\par Prin intermediul mecanismului kprobes (Kernel Probes), putem instrumenta codul nucleului în timp real, injectând rutine de tratare exact acolo unde avem nevoie, fără a atinge codul sursă și fără a recompila sistemul [CRKH05]. Funcționarea sa este elegantă: sonda înlocuiește discret instrucțiunea originală cu o întrerupere software (de tipul INT3 pe x86). Când execuția lovește această „capcană”, controlul este pasat instantaneu mașinii virtuale eBPF. După procesarea evenimentului, sistemul restaurează și execută instrucțiunea originală. Deși pare un proces complex, această deviere este extrem de rapidă, inducând o întârziere de doar 100–300 nanosecunde [VCP+20] – un cost insesizabil în contextul unui apel de sistem obișnuit.
 
-\par Sentinelul atașează kprobe-uri pe funcțiile \texttt{\_\_x64\_sys\_\{name\}} corespunzătoare celor 21 de syscall-uri monitorizate. Atașarea este dinamică: la pornire, daemonul iterează peste toate programele din colecția eBPF cu prefix \texttt{kp\_} și le atașează la funcțiile kernel corespunzătoare, fără a fi necesară enumerarea lor explicită în codul Go.
-
+\par Sentinelul atașează kprobe-uri pe funcțiile \texttt{\_\_x64\_sys\_\{name\}} corespunzătoare celor 20 de syscall-uri monitorizate. Atașarea este dinamică: la pornire, daemonul iterează peste toate programele din colecția eBPF cu prefix \texttt{kp\_} și le atașează la funcțiile kernel corespunzătoare, fără a fi necesară enumerarea lor explicită în codul Go.
 
 \section{Sisteme de detectare a intruziunilor}
 \label{sec:ids}
@@ -110,14 +109,14 @@
 \subsection{Taxonomie și clasificare}
 \label{subsec:ids_taxonomy}
 
-\par Conceptul monitorizării securității a fost formalizat inițial de Anderson (1980) ca o metodă de prelucrare a jurnalelor de audit în scopul detectării utilizării neautorizate a sistemelor informatice \cite{Anderson1980}. Ulterior, Denning (1987) a publicat fundamentul teoretic al sistemelor IDS, propunând un model independent de sistem capabil să evalueze statistic deviațiile de la comportamentul istoric normal \cite{Denning1987}.
+\par Conceptul monitorizării securității a fost formalizat inițial de Anderson (1980) ca o metodă de prelucrare a jurnalelor de audit în scopul detectării utilizării neautorizate a sistemelor informatice \cite{Anderson1980}. Ulterior, Denning (1987) a publicat fundamentul teoretic al sistemelor IDS (sisteme de detecție a intruziunilor), propunând un model independent de sistem capabil să evalueze statistic deviațiile de la comportamentul istoric normal \cite{Denning1987}.
 
 \par Taxonomia propusă de Axelsson (2000) \cite{Axelsson2000} oferă un cadru de clasificare în care Sentinel se raportează astfel:
 
 \begin{itemize}
     \item \textit{Sursa datelor}: HIDS (Host-based) versus NIDS (Network-based). Sentinel este exclusiv un sistem HIDS, rezoluția sa fiind limitată la apelurile de sistem ale mașinii gazdă.
-    \item \textit{Paradigma de detecție}: Detecție bazată pe semnături (misuse detection) versus anomalii. Sistemul de față abordează problema hibrid, combinând un set de euristici statice (semnături) cu un model nesupervizat pentru anomalii (Isolation Forest).
-    \item \textit{Frecvența analizei}: detecție continuă versus periodică. Sentinel operează în timp real, cu latența limitată de viteza ring buffer-ului.
+    \item \textit{Metoda de detecție}: Detecție bazată pe semnături versus anomalii. Sistemul de față abordează problema hibrid, combinând un set de euristici statice cu un model nesupervizat pentru anomalii.
+    \item \textit{Frecvența analizei}: detecție continuă versus periodică. Sentinel operează în timp real.
     \item \textit{Tipul de răspuns}: alertare pasivă versus limitare activă (containment). Sentinel oferă un răspuns activ, autonom și gradual.
 \end{itemize}
 
@@ -127,8 +126,10 @@
 
 \par Abordarea bazată pe semnături excelează prin rata infimă a rezultatelor fals pozitive pentru atacurile cunoscute, însă suferă din cauza ineficienței totale în fața atacurilor neclasificate (zero-day) \cite{GarciaTe2009}. Alternativa, detecția anomaliilor, profilează starea de normalitate a sistemului; deși superioară în identificarea vectorilor de atac noi, aceasta este penalizată de un volum mai mare de rezultate fals pozitive \cite{Chandola2009}.
 
+\begin{comment}
+TODO: check factuality further
 \par În stabilirea algoritmului adecvat, studiul lui Goldstein și Uchida \cite{Goldstein2016} demonstrează performanța net superioară a modelului Isolation Forest pe distribuții de date unde anomaliile reprezintă un procent extrem de redus ($< 5\%$), modelând perfect realitatea evenimentelor de securitate. Această alegere este validată și de lucrarea de sinteză elaborată de Buczak și Guven \cite{Buczak2016}, care evidențiază eficiența metodelor de ansamblu (ensemble methods) pe spații de date cu dimensionalitate variabilă.
-
+\end{comment}
 
 \section{Algoritmul Isolation Forest}
 \label{sec:isolation_forest}
@@ -173,16 +174,16 @@
 \section{Peisajul amenințărilor în ecosistemul Linux și Cadrul MITRE ATT\&CK}
 \label{sec:threat_landscape}
 
-\par Evaluarea oricărui sistem modern de detectare a intruziunilor necesită raportarea riguroasă la un cadru standardizat de amenințări. În ecosistemul Linux, vectorii de atac au evoluat de la simple scripturi de exploatare la arhitecturi complexe, mapate exhaustiv în cadrul MITRE ATT\&CK \cite{MITRE_ATTCK}. Evaluarea eficacității sistemului Sentinel se fundamentează pe o analiză teoretică a 21 de scenarii de atac care acoperă tactici critice: persistență, escaladarea privilegiilor, evaziune defensivă, acces la credențiale și execuție.
+\par Evaluarea oricărui sistem modern de detectare a intruziunilor necesită raportarea riguroasă la un cadru standardizat de amenințări. În ecosistemul Linux, vectorii de atac au evoluat de la simple scripturi de exploatare la arhitecturi complexe, mapate exhaustiv în cadrul MITRE ATT\&CK \cite{MITRE_ATTCK}. Evaluarea eficacității sistemului Sentinel se fundamentează pe o analiză teoretică a 20 de scenarii de atac care acoperă tactici critice: persistență, escaladarea privilegiilor, evaziune defensivă, acces la credențiale și execuție.
 
 \par În continuare sunt detaliate principalele categorii teoretice de amenințări care justifică arhitectura de monitorizare a sistemului:
 
 \subsection{Rootkit-uri și persistența la nivel de nucleu}
 \label{subsec:rootkits}
 
-\par Compromiterea nucleului Linux s-a realizat istoric prin rootkit-uri de tip LKM (\textit{Loadable Kernel Module}), care vizează alterarea fluxului de execuție din spațiul privilegiat. Un etalon istoric este rootkit-ul \textit{Diamorphine}, apărut în 2013, care interceptează apeluri de sistem (precum \texttt{getdents64}) pentru a ascunde procese și asigură o portiță de acces (\textit{backdoor}) gestionată prin semnale magice. Încărcarea acestor module este semnalizată primar de apelul \texttt{init\_module}.
+\par Compromiterea nucleului Linux s-a realizat istoric prin rootkit-uri de tip LKM (\textit{Loadable Kernel Module}), care vizează alterarea fluxului de execuție din spațiul privilegiat. Un etalon istoric este rootkit-ul \textit{Diamorphine}, apărut în 2013, care interceptează apeluri de sistem (precum \texttt{getdents64}) pentru a ascunde procese și asigură o portiță de acces (\textit{backdoor}) gestionată prin abuzarea apelului de sistem kill și interceptarea unor semnale POSIX predefinite pentru a declanșa funcții ascunse, care ar putea da privilegii atacatorului. Încărcarea acestor module este semnalizată primar de apelul \texttt{init\_module}.
 
-\par Pentru a evita lăsarea de artefacte pe disc, atacatorii sofisticați utilizează apelul \texttt{finit\_module}, care permite încărcarea unui modul compilat direct dintr-un descriptor de fișier menținut exclusiv în memoria volatilă. Amenințările de generație nouă includ rootkit-urile eBPF, exemplificate de modelul teoretizat de \textit{TripleCross} în 2022 \cite{TripleCross2022}. Acestea demonstrează capacitatea atacatorilor de a subverti însăși tehnologia eBPF pentru a intercepta apeluri de sistem și a orchestra injecții de cod invizibile scanărilor tradiționale.
+\par Pentru a evita lăsarea de artefacte pe disc, atacatorii utilizează apelul \texttt{finit\_module}, care permite încărcarea unui modul compilat direct dintr-un descriptor de fișier menținut exclusiv în memoria volatilă. Amenințările de generație nouă includ rootkit-urile eBPF, exemplificate de modelul teoretizat de \textit{TripleCross} în 2022 \cite{TripleCross2022}. Acestea demonstrează capacitatea atacatorilor de a subverti însăși tehnologia eBPF pentru a intercepta apeluri de sistem și a orchestra injecții de cod invizibile scanărilor tradiționale.
 
 \subsection{Escaladarea privilegiilor}
 \label{subsec:privesc}
@@ -201,9 +202,9 @@
 
 \par O derivare complexă a acestei tehnici este golirea proceselor (\textit{Process Hollowing} sau \textit{RunPE}). Un proces legitim este instanțiat și suspendat, i se alocă o regiune de memorie nouă, simultan lizibilă, scriptibilă și executabilă (RWX) prin \texttt{mmap}, iar fluxul normal este înlocuit cu logica atacatorului \cite{Elastic2022}.
 
-\subsection{Accesul la credențiale și comanda-și-control}
+\subsection{Accesul la credențiale și controlul (command-and-control / c2)}
 \label{subsec:c2}
 
 \par \textbf{Furtul de credențiale.} Atacatorii enumeră sistematic fișiere sensibile (de exemplu, \texttt{/etc/shadow}, chei SSH private) printr-o cascadă de apeluri \texttt{openat}. Pentru extragerea parolelor aflate în uz, tehnici similare utilitarului Mimikatz (Windows) sunt aplicate pe Linux prin citirea memoriei proceselor rulante, mapată în \texttt{/proc/<pid>/mem} \cite{Bundles2021}.
 
-\par \textbf{Exfiltrarea datelor.} Stabilirea canalelor de comandă și control implică adesea instanțierea de \textit{reverse shells}, procedeu în care gazda compromisă inițiază conexiuni TCP ieșitoare (\textit{outbound}) către atacator, ocolind astfel regulile restrictive de firewall pentru traficul intrant. Amprenta comportamentală constă în serii de apeluri \texttt{socket} și \texttt{connect}, urmate de deturnarea fluxurilor de intrare/ieșire prin invocarea unui shell via \texttt{execve} \cite{Cozzi2018}.
+\par \textbf{Exfiltrarea datelor.} Stabilirea canalelor de comandă și control implică adesea instanțierea de \textit{reverse shells}, procedeu în care gazda compromisă inițiază conexiuni TCP de ieșire (\textit{outbound}) către atacator, ocolind astfel regulile restrictive de firewall pentru traficul de intrare. Amprenta comportamentală constă în serii de apeluri \texttt{socket} și \texttt{connect}, urmate de deturnarea fluxurilor de intrare/ieșire prin invocarea unui shell via \texttt{execve} \cite{Cozzi2018}.

@@ -11,20 +11,19 @@
 
 \begin{itemize}
     \item \textbf{RF1}: Interceptarea la nivel de kernel a apelurilor de sistem relevante din perspectiva securității, fără a necesita recompilarea nucleului sau instalarea unor module terțe.
-    \item \textbf{RF2}: Calcularea unui scor de risc compus pentru fiecare eveniment detectat, fundamentat pe cel puțin un strat de reguli euristice statice.
+    \item \textbf{RF2}: Calcularea unui scor de risc compus pentru fiecare eveniment detectat, fundamentat pe cel puțin un set de reguli euristice statice.
     \item \textbf{RF3}: Clasificarea decizională a evenimentelor în șase stări de severitate, variind de la activitate benignă (OK) până la necesitatea blocării imediate a procesului (FREEZE).
     \item \textbf{RF4}: Aplicarea automată a acțiunilor de carantinare, strict proporționale cu severitatea detectată, utilizând mecanismele native și standardizate ale kernel-ului Linux.
     \item \textbf{RF5}: Persistarea evenimentelor și a acțiunilor de carantinare într-o bază de date locală, optimizată pentru audit și analiză retrospectivă.
-    \item \textbf{RF6}: Expunerea unui API REST pentru integrarea opțională a unui modul de Machine Learning (ML), capabil de reantrenare dinamică fără întreruperea monitorizării.
+    \item \textbf{RF6}: Expunerea unui serviciu REST API pentru integrarea opțională a unui modul de Machine Learning (ML), capabil de reantrenare dinamică fără întreruperea monitorizării.
 \end{itemize}
 
 \par Cerințele nefuncționale critice pentru un mediu de producție sunt:
 
 \begin{itemize}
-    \item \textbf{RN1}: Impactul operațional (overhead-ul) introdus de instrumentarea eBPF asupra procesorului (CPU) să fie limitat sub \textbf{2\%} într-un scenariu de activitate normală a sistemului.
-    \item \textbf{RN2}: Latența de reacție --- măsurată de la momentul intercepției până la aplicarea efectivă a măsurii de carantinare (excluzând evaluarea ML) --- să nu depășească \textbf{5 ms}.
-    \item \textbf{RN3}: Compatibilitatea arhitecturală necesită un kernel Linux $\geq 5.8$, având subsistemul \textit{cgroup v2} activat.
-    \item \textbf{RN4}: Monitorizarea și raportarea continuă a eventualelor pierderi de evenimente cauzate de saturarea memoriei partajate (ring buffer).
+    \item \textbf{RN1}: Impactul operațional (overhead-ul) introdus de instrumentarea eBPF asupra procesorului (CPU) să fie limitat sub \textbf{5\%} într-un scenariu de activitate normală a sistemului.
+    \item \textbf{RN2}: Latența de reacție --- măsurată de la momentul intercepției până la aplicarea efectivă a măsurii de carantinare (excluzând evaluarea ML) --- să nu depășească \textbf{100 ms}.
+    \item \textbf{RN3}: Monitorizarea și raportarea continuă a eventualelor pierderi de evenimente cauzate de saturarea memoriei partajate (ring buffer).
 \end{itemize}
 
 
@@ -57,30 +56,32 @@
 \label{fig:architecture}
 \end{figure}
 
+\begin{comment}
+TODO: check rellevance
 \par Decuplarea daemonului de managerul de carantinare, realizată prin intermediul bazei de date SQLite, oferă un avantaj major de reziliență: permite reluarea procesării evenimentelor din punctul ultimei opriri în cazul unui crash (toleranță la defecte) și elimină dependența de sincronizare strictă între producerea evenimentului și aplicarea pedepsei. O latență de interogare asincronă de 500 ms a bazei de date este considerată un compromis acceptabil pentru majoritatea acțiunilor de izolare, menținând în același timp un impact minim asupra I/O-ului sistemului.
-
+\end{comment}
 
 \section{Proiectarea programului eBPF}
 \label{sec:ebpf_design}
 
-\par Componenta eBPF este proiectată să asigure intercepția a 21 de apeluri de sistem critice. Fiecare apel este instrumentat printr-o sondă kprobe dedicată, având prefixul \texttt{kp\_}. Arhitectura folosește două tipologii principale de rutine de tratare (handlers):
+\par Componenta eBPF este proiectată să asigure interceptarea a 20 de apeluri de sistem relevante. Fiecare apel este instrumentat printr-un punct de interceptare kprobe dedicată, având prefixul \texttt{kp\_}. Arhitectura folosește două tipologii principale de rutine de tratare (handlers):
 
 \begin{itemize}
     \item \texttt{submit\_event(nr)}: funcție generică utilizată pentru apelurile care nu operează cu căi de fișiere. Extrage un set esențial de metadate: marca temporală (nanosecunde), PID, UID, numărul apelului și denumirea executabilului (\texttt{comm}).
     \item \texttt{submit\_event\_with\_path(nr, ctx)}: variantă extinsă, utilizată pentru apelurile care manipulează fișiere (ex. \texttt{openat}, \texttt{unlinkat}, \texttt{renameat2}). Această rutină utilizează asistentul \texttt{bpf\_probe\_read\_user\_str} pentru a extrage dinamic pointer-ul către șirul de caractere (din registrul \texttt{rsi} al structurii \texttt{pt\_regs}) peste granița spațiului utilizator.
 \end{itemize}
 
-\par Handler-ul pentru \texttt{write} (syscall 1) necesită un tratament special. Deoarece argumentul său este un descriptor de fișier (număr întreg), nu o cale, handler-ul eBPF ignoră explicit scrierile către descriptorii standard (0, 1 și 2) --- acestea generează un volum ridicat de evenimente cu relevanță de securitate scăzută. Pentru descriptorii rămași, funcția codifică valoarea numerică într-un șir de forma \texttt{"fd:N"}. Sarcina traducerii este delegată daemonului Go din spațiul utilizator, care interoghează pseudo-sistemul \texttt{/proc/\{pid\}/fd/\{N\}} pentru a obține calea absolută, menținând astfel execuția eBPF extrem de fluidă \cite{Kerrisk2010}.
+\par Handler-ul pentru \texttt{write} (syscall 1) necesită un tratament special. Deoarece argumentul său este un descriptor de fișier (număr întreg), nu o cale, handler-ul eBPF ignoră explicit scrierile către descriptorii standard (0, 1 și 2) --- acestea generează un volum ridicat de evenimente cu relevanță de securitate scăzută. Pentru descriptorii rămași, funcția codifică valoarea numerică într-un șir de forma \texttt{"fd:N"}. Sarcina traducerii este delegată daemonului Go din spațiul utilizator, care interoghează pseudo-sistemul \texttt{/proc/\{pid\}/fd/\{N\}} pentru a obține calea absolută, menținând astfel execuția eBPF fluidă \cite{Kerrisk2010}.
 
-\par Filtrul pe mapa \texttt{pid\_blacklist} previne fenomenul de auto-instrumentare: imediat după lansare, daemonul Go își scrie propriul PID în această structură partajată de tip dicționar. La fiecare kprobe, codul eBPF verifică această listă și abandonează silențios interceptările generate de componentele de securitate proprii, eliminând astfel bucla de feedback ce ar satura ring buffer-ul.
+\par Filtrul pe tabela de dispersie \texttt{pid\_blacklist} previne fenomenul de auto-instrumentare (detectia propriilor apeluri de sistem): imediat după lansare, daemonul Go își scrie propriul PID în această structură partajată de tip dicționar. La fiecare kprobe, codul eBPF verifică această listă și abandonează silențios interceptările generate de componentele de securitate proprii, eliminând astfel bucla de feedback ce ar satura ring buffer-ul.
 
 
 \section{Proiectarea motorului de scoring}
 \label{sec:scoring_design}
 
-\par Motorul de scoring rafinează progresiv nivelul de amenințare printr-un sistem decizional stratificat, generând un scor final în intervalul $[0, 100]$.
+\par Motorul de scoring rafinează progresiv nivelul de amenințare printr-un sistem decizional etapizat, generând un scor final în intervalul $[0, 100]$.
 
-\subsection{Stratul 1: Evaluarea statică a apelurilor de sistem}
+\subsection{Etapa 1: Evaluarea statică a apelurilor de sistem}
 \label{subsec:static_weights}
 
 \par Fiecărui apel interceptat îi este asociată o pondere euristică $w_{nr} \in [5, 95]$, calibrată empiric conform studiilor privind vectorii de atac Linux \cite{Cozzi2018, Buczak2016}. Ponderile extreme (95) sunt alocate acțiunilor care nu au utilitate legitimă normală (ex. \texttt{init\_module}), în timp ce valorile minime (5) corespund apelurilor zgomotoase (\texttt{openat}). Dacă procesul inițiator beneficiază de privilegii administrative ($uid = 0$), ponderea este majorată cu un factor de 1,3, reflectând gravitatea exponențială a atacurilor executate cu drepturi depline:
@@ -93,10 +94,10 @@
 \par Amplificarea pentru procesele root reflectă faptul că aceleași syscall-uri au un impact semnificativ mai mare când sunt executate cu privilegii complete.
 
 
-\subsection{Stratul 2: Analiza comportamentală a activității în rafală (Burst Detection)}
+\subsection{Etapa 2: Analiza comportamentală a activității în rafală (Burst Detection)}
 \label{subsec:burst_detection}
 
-\par Atacurile de tip forță brută (SSH brute-force) sau epuizare a resurselor (fork bombs) se manifestă prin frecvențe anormale de apeluri identice. Stratul 2 implementează o fereastră temporală glisantă (sliding window) care monitorizează agregarea pe tripletul (\texttt{PID}, \texttt{syscall\_nr}, \texttt{start\_time}). Includerea timpului de inițializare a procesului (\texttt{start\_time}) previne coliziunile cauzate de fenomenul de \textit{PID wrap-around} în sistemele cu rotație rapidă a proceselor.
+\par Atacurile de tip forță brută (SSH brute-force) sau epuizare a resurselor (fork bombs) se manifestă prin frecvențe anormale de apeluri identice. Etapa 2 implementează o fereastră temporală glisantă (sliding window) care monitorizează agregarea pe tripletul (\texttt{PID}, \texttt{syscall\_nr}, \texttt{start\_time}). Includerea timpului de inițializare a procesului (\texttt{start\_time}) previne coliziunile cauzate de fenomenul de \textit{PID wrap-around} în sistemele cu rotație rapidă a proceselor.
 
 \begin{table}[htbp]
 \begin{center}
@@ -119,10 +120,10 @@
 \par Intervalul de cooldown de 10 s previne fenomenul de \textit{alert fatigue} --- odată emis un alert pentru un triplet (PID, syscall), acesta nu va mai fi reeditat timp de 10 secunde pentru aceeași manifestare continuă, reducând zgomotul în baza de date.
 
 
-\subsection{Stratul 3: Analiza contextuală bazată pe căile fișierelor}
+\subsection{Etapa 3: Analiza contextuală bazată pe căile fișierelor}
 \label{subsec:path_alerts}
 
-\par Al treilea strat realizează o potrivire de tipare (pattern matching) pe căile fișierelor accesate de syscall-urile relevante (\texttt{write} cu fd rezolvat, \texttt{openat}, \texttt{unlinkat}, \texttt{renameat2}), vizând tactici cunoscute de post-exploatare:
+\par A treia etapaă realizează o potrivire de tipare (pattern matching) pe căile fișierelor accesate de syscall-urile relevante (\texttt{write} cu fd rezolvat, \texttt{openat}, \texttt{unlinkat}, \texttt{renameat2}), vizând tactici cunoscute de post-exploatare:
 
 \begin{itemize}
     \item \textbf{Log Tamper} (scor 50): scriere sau alterare a directoarelor \texttt{/var/log/}, specifică tentativelor de ștergere a urmelor.
@@ -197,8 +198,8 @@ FREEZE   & $\geq 95$ & Suspendarea procesului la nivel de kernel (\texttt{SIGSTO
 \par Sunt menținute două tabele principale:
 
 \begin{itemize}
-    \item \texttt{events}: jurnalizează totalitatea evenimentelor relevante. Câmpurile includ \texttt{alert\_type}, \texttt{score}, \texttt{state}, \texttt{pid}, \texttt{comm}, \texttt{timestamp} (ISO 8601) și un payload flexibil de metadate \texttt{detail} (în format JSON, conținând câmpurile \texttt{ts\_ns}, \texttt{syscall\_name}, \texttt{fname} și \texttt{source}). Un flag specific denumit \texttt{source} delimitează acțiunile interceptate direct în kernel (\texttt{"kprobe"}) de pachetele sintetice injectate în mediile de testare (\texttt{"synthetic"}).
-    \item \texttt{quarantine\_log}: o pistă de audit irefutabilă pentru măsurile de remediere automată. Leagă acțiunea punitivă de declanșatorul inițial prin cheia externă \texttt{event\_id} și înregistrează metadatele sancțiunii: acțiunile sistemice (\texttt{actions} codificat JSON), confirmarea succesului, erorile OS și durata temporală de execuție a pedepsei (\texttt{latency\_ms}).
+    \item \texttt{events}: jurnalizează totalitatea evenimentelor relevante. Câmpurile includ \texttt{alert\_type}, \texttt{score}, \texttt{state}, \texttt{pid}, \texttt{comm}, \texttt{timestamp} (ISO 8601) și un payload flexibil de metadate \texttt{detail} (în format JSON, conținând câmpurile \texttt{ts\_ns}, \texttt{syscall\_name}, \texttt{fname} și \texttt{source}).
+    \item \texttt{quarantine\_log}: o pistă de audit irefutabilă pentru măsurile de remediere automată. Leagă acțiunea de izolare de declanșatorul inițial prin cheia externă \texttt{event\_id} și înregistrează metadatele restricției aplicate: acțiunile sistemice (\texttt{actions} codificat JSON), confirmarea succesului, erorile OS și durata temporală de execuție a pedepsei (\texttt{latency\_ms}).
 \end{itemize}
-
+ 
 \par Câmpul \texttt{latency\_ms} din \texttt{quarantine\_log} înregistrează durata totală de aplicare a acțiunilor de containment, de la selectarea evenimentului până la confirmarea acțiunilor, oferind un mecanism integrat prin care performanța de reacție a sistemului poate fi evaluată și validată obiectiv în concordanță cu cerința nefuncțională RN2.

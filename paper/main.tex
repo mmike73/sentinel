@@ -8,6 +8,7 @@
 %\geometry{a4paper,top=2.5cm,left=3cm,right=2.5cm,bottom=2.5cm}
 %in style
 %controlling the appearance of your headers and footers
+\usepackage{comment}
 \usepackage{fancyhdr}
 \setlength{\headheight}{15pt}
 \pagestyle{fancy}
@@ -39,7 +40,7 @@ ABSTRACT
 \vspace{0.5cm}	
 %\cleardoublepage
 
-This thesis presents the design and implementation of Sentinel, an eBPF-based Host Intrusion Detection and Response System (HIDS) for the Linux platform. Sentinel attaches kprobes to 21 security-relevant system calls, collects events through a 64 MiB ring buffer and processes them in a Go user-space daemon. A three-layer hybrid scoring engine assigns risk scores: static per-syscall weights calibrated on empirical malware data, a sliding-window burst detector, and an optional Isolation Forest ML scorer served through a REST API. Scores are mapped to six severity states (OK / WATCH / WARN / THROTTLE / ISOLATE / FREEZE) and a quarantine manager applies proportional containment actions via Linux cgroup v2 and nftables --- CPU throttling at 10\%, memory capping at 256 MiB, network isolation by cgroup inode, and full process freezing via SIGSTOP and \texttt{cgroup.freeze}. The system is validated against a reproducible suite of 21 attack scenarios covering kernel rootkits, privilege escalation, process injection, network exfiltration, persistence and fileless execution. Measured containment latency is below 5 ms; eBPF overhead is approximately 1.2\% CPU on a kernel-build workload. Original contributions include the adaptive weighted scoring mechanism, the cgroup-inode-based selective network isolation, the PID-reuse-safe burst key, and the self-contained attack test suite.
+This thesis presents the design and implementation of Sentinel, an eBPF-based Host Intrusion Detection and Response System (HIDS) for the Linux platform. Sentinel attaches kprobes to 20 security-relevant system calls, collects events through a 64 MiB ring buffer and processes them in a Go user-space daemon. A three-layer hybrid scoring engine assigns risk scores: static per-syscall weights calibrated on empirical malware data, a sliding-window burst detector, and an optional Isolation Forest ML scorer served through a REST API. Scores are mapped to six severity states (OK / WATCH / WARN / THROTTLE / ISOLATE / FREEZE) and a quarantine manager applies proportional containment actions via Linux cgroup v2 and nftables --- CPU throttling at 10\%, memory capping at 256 MiB, network isolation by cgroup inode, and full process freezing via SIGSTOP and \texttt{cgroup.freeze}. The system is validated against a reproducible suite of 20 attack scenarios covering kernel rootkits, privilege escalation, process injection, network exfiltration, persistence and fileless execution. Measured containment latency is below 5 ms; eBPF overhead is approximately 1.2\% CPU on a kernel-build workload. Original contributions include the adaptive weighted scoring mechanism, the cgroup-inode-based selective network isolation, the PID-reuse-safe burst key, and the self-contained attack test suite.
 
 
 

@@ -1,7 +1,7 @@
 \chapter{Implementare și Testare}
 \label{chap:ch4}
 
-\par Capitolul de față detaliază implementarea arhitecturii Sentinel și evaluează eficacitatea sistemului printr-o suită exhaustivă de 21 de scenarii de atac. Fiecare componentă este analizată individual, cu accent pe deciziile arhitecturale netriviale, optimizările de performanță și aspectele de siguranță a execuției care fundamentează corectitudinea sistemului.
+\par Capitolul de față detaliază implementarea arhitecturii Sentinel și evaluează eficacitatea sistemului printr-o suită exhaustivă de 20 de scenarii de atac. Fiecare componentă este analizată individual, cu accent pe deciziile arhitecturale netriviale, optimizările de performanță și aspectele de siguranță a execuției care fundamentează corectitudinea sistemului.
 
 
 \section{Mediul de dezvoltare și testare}
@@ -112,7 +112,7 @@ static __always_inline int submit_event(__u32 syscall_nr)
 
 \par Inițializarea reader-ului și deschiderea bazei de date cu instrucțiune pregătită se realizează astfel:
 
-\begin{lstlisting}[style=gostyle,caption={Inițializarea ring buffer reader și a prepared statement SQLite}]
+\begin{lstlisting}[style=gostyle,caption={Inițializarea ring buffer reader și a instrcțiunii de inserție SQLite}]
 rb, err := ringbuf.NewReader(coll.Maps["events"])
 if err != nil { log.Fatalf("ringbuf.NewReader: %v", err) }
 defer rb.Close()
@@ -125,7 +125,7 @@ stmt, _ := db.Prepare(`INSERT INTO events
     VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`)
 \end{lstlisting}
 
-\par Bucla principală citește din ring buffer în mod blocant, parsează evenimentele prin \texttt{binary.Read} (little-endian, x86\_64) și aplică cele trei straturi de scoring. La fiecare eveniment, scorul static este calculat întâi, apoi suprascris de detectorul de rafale sau de alertele bazate pe cale, dacă acestea se declanșează:
+\par Bucla principală citește din ring buffer în mod blocant, parsează evenimentele prin \texttt{binary.Read} și aplică cele trei etape de scoring:
 
 \begin{lstlisting}[style=gostyle,caption={Bucla principală de procesare a evenimentelor din ring buffer}]
 for {
@@ -156,7 +156,7 @@ for {
 }
 \end{lstlisting}
 
-\par Bucla principală citește din ring buffer în mod blocant (\texttt{rb.Read()}), parsează evenimentele prin \texttt{binary.Read} (little-endian, pentru a respecta ordinea octeților x86\_64) și aplică secvențial cele trei straturi de scoring. Operațiunea de inserare în SQLite utilizează o instrucțiune pregătită (\textit{prepared statement}) pentru a elimina overhead-ul de parsare SQL per eveniment.
+\par Operațiunea de inserare în SQLite utilizează o instrucțiune pregătită (\textit{prepared statement}) pentru a elimina overhead-ul de parsare SQL per eveniment.
 
 \par Detectarea rafale (\texttt{burstTracker}) menține o mapă \texttt{windows[key][]int64} cu timestamp-urile apelurilor dintr-o fereastră glisantă. Cheia de burst este:
 
@@ -167,7 +167,7 @@ for {
 
 \par Incluzând \texttt{start\_time} (câmpul 22 din \texttt{/proc/\{pid\}/stat}, exprimat în \textit{ticks} de ceas) în cheie, sistemul distinge între procese diferite care rulează cu același PID pe parcursul testelor --- o situație frecventă în suita de atacuri, unde procesele au durată scurtă de viață. Utilizarea exclusivă a ultimilor 16 biți din \texttt{start\_time} introduce o probabilitate de coliziune matematic neglijabilă ($\approx 1/65536$), un compromis excelent între precizia detecției și amprenta de memorie.
 
-\par Funcția \texttt{burstKey} codifică identitatea unui proces în 64 de biți, incluzând \texttt{start\_time} din \texttt{/proc/\{pid\}/stat} pentru a distinge procese reutilizatoare de PID:
+\par Funcția \texttt{burstKey} codifică identitatea unui proces în 64 de biți, incluzând \texttt{start\_time} din \texttt{/proc/\{pid\}/stat} pentru a distinge procese care reutilizeaza PID-uri:
 
 \begin{lstlisting}[style=gostyle,caption={Cheia de burst și logica ferestrei glisante}]
 func burstKey(pid, nr uint32) uint64 {
@@ -360,8 +360,10 @@ func isolateNetwork(pid int) error {
 }
 \end{lstlisting}
 
+\begin{comment}
+    TODO: not so necesary
 \par Auto-dezghețarea pentru starea FREEZE este gestionată de un goroutine \texttt{unfreezeWatcher} care verifică la fiecare 5 secunde procesele cu deadline expirat. Dezghețarea constă în scrierea \texttt{"0"} în \texttt{cgroup.freeze}, trimiterea \texttt{SIGCONT} și eliminarea procesului din cgroup. Intervalul implicit de 5 minute este configurabil la pornire prin flag-ul \texttt{--unfreeze-after}.
-
+\end{comment}
 
 \section{Suita de teste de atac}
 \label{sec:attack_suite}
@@ -369,7 +371,7 @@ func isolateNetwork(pid int) error {
 \subsection{Metodologia de testare}
 \label{subsec:test_method}
 
-\par Fiecare scenariu de atac este definit printr-un fișier \texttt{attack.toml} cu patru câmpuri: \texttt{id}, \texttt{name}, \texttt{alert\_type} (tipul de alertă așteptat) și \texttt{expected\_state} (starea minimă așteptată). Scriptul \texttt{run.sh} corespunzător execută atacul propriu-zis și termină în cel mult 30 de secunde.
+\par Fiecare scenariu de atac este definit printr-un fișier \texttt{attack.toml} cu patru câmpuri: \texttt{id}, \texttt{name}, \texttt{alert\_type} (tipul de alertă așteptat) și \texttt{expected\_state} (starea minimă așteptată). Scriptul \texttt{run.sh} corespunzător execută atacul propriu-zis.
 
 \par Orchestratorul Python \texttt{run\_sentinel.py} automatizează ciclul de testare, garantând izolarea mediului între teste prin golirea jurnalurilor WAL și restaurarea bazei de date la starea de zero:
 
@@ -426,7 +428,7 @@ REP-12 & Brute-force SSH                      & NetworkAnomaly      & THROTTLE \
 
 \par REP-11 (injecție ptrace) simulează tehnica clasică de deturnare a memoriei unui proces activ printr-o serie de apeluri \texttt{ptrace(PTRACE\_ATTACH, ...)}, \texttt{ptrace(PTRACE\_POKETEXT, ...)} și \texttt{ptrace(PTRACE\_DETACH, ...)}. Syscall-ul \texttt{ptrace} are ponderea de risc 75; amplificat cu 1.3 pentru root ($97.5$, clamped la 95), produce starea FREEZE.
 
-\par REP-12 (brute-force SSH) generează conexiuni repetate la portul 22 printr-un program C care ciclează \texttt{socket()} + \texttt{connect()} de câteva sute de ori pe secundă. Stratul de burst detection detectează depășirea pragului de 5 apeluri \texttt{connect} în 3 secunde și emite un alert cu scor 75, producând starea THROTTLE.
+\par REP-12 (brute-force SSH) generează conexiuni repetate la portul 22 printr-un program C care ciclează \texttt{socket()} + \texttt{connect()} de câteva sute de ori pe secundă. Etapa de burst detection detectează depășirea pragului de 5 apeluri \texttt{connect} în 3 secunde și emite un alert cu scor 75, producând starea THROTTLE.
 
 \subsection{Scenariile avansate (REP-13 -- REP-21)}
 \label{subsec:advanced_attacks}
@@ -435,7 +437,7 @@ REP-12 & Brute-force SSH                      & NetworkAnomaly      & THROTTLE \
 
 \begin{table}[htbp]
 \begin{center}
-\begin{tabular}{|p{45pt}|p{110pt}|p{75pt}|p{55pt}|}
+\begin{tabular}{|p{45pt}|p{90pt}|p{95pt}|p{55pt}|}
 \hline
 \textbf{ID} & \textbf{Scenariu} & \textbf{Tip alertă} & \textbf{Stare} \\
 \hline\hline
@@ -473,7 +475,7 @@ REP-21 & Tentativă VM escape                   & PrivilegeEscalation & ISOLATE 
 \section{Clasificarea și descrierea teoretică a suitei de atacuri}
 \label{sec:attack_classification}
 
-\par Suita de 21 de scenarii de atac utilizată pentru validarea sistemului Sentinel a fost concepută pentru a acoperi exhaustiv tehnicile documentate în matricea MITRE ATT\&CK pentru Linux \cite{MITRE_ATTCK}. Pentru claritate arhitecturală, atacurile au fost grupate în șapte categorii fundamentale, acompaniate de secvențele de cod care declanșează anomaliile vizate.
+\par Suita de 20 de scenarii de atac utilizată pentru validarea sistemului Sentinel a fost concepută pentru a acoperi exhaustiv tehnicile documentate în matricea MITRE ATT\&CK pentru Linux \cite{MITRE_ATTCK}. Pentru claritate arhitecturală, atacurile au fost grupate în șapte categorii fundamentale, acompaniate de secvențele de cod care declanșează anomaliile vizate.
 
 \subsection{Rootkit-uri și persistență la nivel de nucleu (Module LKM)}
 \label{subsec:attack_lkm}
