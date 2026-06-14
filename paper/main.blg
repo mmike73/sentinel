@@ -3,10 +3,9 @@ Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: main.aux
 The style file: alpha.bst
 Database file #1: references.bib
-Warning--I didn't find a database entry for "Hogan2022"
 You've used 30 entries,
             2543 wiz_defined-function locations,
-            759 strings with 10100 characters,
+            757 strings with 10082 characters,
 and the built_in function-call counts, 12513 in all, are:
 = -- 1272
 > -- 555
@@ -45,4 +44,3 @@ warning$ -- 0
 while$ -- 112
 width$ -- 32
 write$ -- 411
-(There was 1 warning)

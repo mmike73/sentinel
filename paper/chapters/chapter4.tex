@@ -467,7 +467,7 @@ REP-21 & Tentativă VM escape                   & PrivilegeEscalation & ISOLATE 
 
 \par REP-13 (execuție fără fișier pe disc) simulează tehnica \textit{fileless malware}: codul este copiat într-o zonă de memorie anonimă creată cu \texttt{mmap(MAP\_ANONYMOUS)}, marcată executabilă cu \texttt{mprotect(PROT\_EXEC)}, și apelată direct. Combinația apelurilor \texttt{mmap} (pentru alocare) și \texttt{mprotect} (pentru acordarea drepturilor de execuție zonelor anonime) este detectată cu precizie de motorul logic, producând scoruri de 40, respectiv 45, și rezultând în starea WARN.
 
-\par REP-19 (rootkit eBPF stil TripleCross) reproduce tehnica publicată de Pat Hogan (2022) \cite{Hogan2022}, în care un program eBPF malițios se atașează la apeluri de sistem pentru a modifica comportamentul proceselor. Implementarea din test utilizează un program eBPF inofensiv, dar apelează \texttt{ptrace} pentru a se atașa la un proces țintă, generând scorul de 95 și starea FREEZE.
+\par REP-19 (rootkit eBPF stil TripleCross) în care un program eBPF malițios se atașează la apeluri de sistem pentru a modifica comportamentul proceselor. Implementarea din test utilizează un program eBPF inofensiv, dar apelează \texttt{ptrace} pentru a se atașa la un proces țintă, generând scorul de 95 și starea FREEZE.
 
 \par REP-14 (process hollowing) necesită activarea \texttt{kernel.yama.ptrace\_scope=0} prin sysctl, deoarece Debian 12 restricționează implicit operațiunile ptrace la relații părinte-copil. Scenariul demonstrează că Sentinel detectează corect tehnica indiferent de configurația Yama, deoarece monitorizarea se face la nivelul syscall, nu la nivelul politicii Yama.
 
